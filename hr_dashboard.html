@@ -2197,9 +2197,13 @@ function drawOrgConnectors(){
 
 <script>
 // ── 내장 엑셀 자동 로드 ──
-(function(){
-  if(typeof EMBEDDED_XLSX_B64 === 'undefined' || !EMBEDDED_XLSX_B64) return;
+window.addEventListener('load', function(){
+  if(typeof EMBEDDED_XLSX_B64 === 'undefined' || !EMBEDDED_XLSX_B64) {
+    $('file-screen').classList.remove('hidden');
+    return;
+  }
   try {
+    setOverlay('데이터 로드 중...');
     const binary = atob(EMBEDDED_XLSX_B64);
     const bytes  = new Uint8Array(binary.length);
     for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
@@ -2207,15 +2211,15 @@ function drawOrgConnectors(){
     applyOptionalSheets(wb.Sheets);
     $('file-name-label').textContent = 'HR_DataBook_2026_v4.xlsx';
     $('file-screen').classList.add('hidden');
-    setOverlay(null);
-    // loadData with latest month
     const sel = $('monthSelect');
     if(sel && sel.options.length) loadData(sel.value);
+    setOverlay(null);
   } catch(e) {
     console.error('내장 데이터 로드 실패:', e);
+    setOverlay(null);
     $('file-screen').classList.remove('hidden');
   }
-})();
+});
 </script>
 </body>
 </html>
