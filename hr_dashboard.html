@@ -2203,20 +2203,14 @@ window.addEventListener('load', function(){
     return;
   }
   try {
-    setOverlay('데이터 로드 중...');
     const binary = atob(EMBEDDED_XLSX_B64);
     const bytes  = new Uint8Array(binary.length);
     for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-    const wb = XLSX.read(bytes, {type:'array'});
-    applyOptionalSheets(wb.Sheets);
-    $('file-name-label').textContent = 'HR_DataBook_2026_v4.xlsx';
-    $('file-screen').classList.add('hidden');
-    const sel = $('monthSelect');
-    if(sel && sel.options.length) loadData(sel.value);
-    setOverlay(null);
+    const blob = new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const file = new File([blob], 'HR_DataBook_2026_v4.xlsx');
+    handleFile(file);
   } catch(e) {
     console.error('내장 데이터 로드 실패:', e);
-    setOverlay(null);
     $('file-screen').classList.remove('hidden');
   }
 });
