@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR DATA BOOK | 인력현황 대시보드</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary:#1a3a5c; --accent:#2e86de; --accent2:#27ae60;
+      --accent3:#e67e22; --accent4:#e74c3c;
+      --bg:#f0f2f5; --card:#fff; --border:#dce1ea;
+      --text:#1f2d3d; --muted:#6b7a8d;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);}
+
+    /* ── LOADING ── */
+    #overlay{
+      position:fixed;inset:0;background:rgba(26,58,92,.92);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      z-index:9999;color:#fff;gap:18px;
+    }
+    #overlay.hidden{display:none;}
+    .spinner{
+      width:44px;height:44px;border:4px solid rgba(255,255,255,.25);
+      border-top-color:#64b5f6;border-radius:50%;
+      animation:spin .8s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #overlay p{font-size:14px;opacity:.8;}
+
+    /* ── FILE PICKER SCREEN ── */
+    #file-screen{
+      position:fixed;inset:0;background:var(--bg);z-index:9000;
+      display:flex;align-items:center;justify-content:center;
+    }
+    #file-screen.hidden{display:none;}
+    .file-box{
+      background:#fff;border-radius:20px;padding:48px 52px;
+      max-width:580px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.12);
+      text-align:center;
+    }
+    .file-box .icon{font-size:52px;margin-bottom:16px;}
+    .file-box h2{color:var(--primary);font-size:22px;font-weight:800;margin-bottom:8px;}
+    .file-box p{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:24px;}
+    .drop-zone{
+      border:2px dashed var(--border);border-radius:12px;padding:32px 24px;
+      margin-bottom:20px;transition:border-color .2s,background .2s;cursor:pointer;
+    }
+    .drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:#f0f7ff;}
+    .drop-zone p{color:var(--muted);font-size:13px;margin-top:8px;}
+    .drop-zone .drop-icon{font-size:32px;}
+    .file-btn{
+      display:inline-block;padding:12px 28px;background:var(--accent);color:#fff;
+      border:none;border-radius:8px;font-size:14px;font-weight:700;
+      cursor:pointer;transition:background .15s;
+    }
+    .file-btn:hover{background:#1a6fc4;}
+    .file-err{color:var(--accent4);font-size:12px;margin-top:12px;display:none;}
+    .sheet-guide{
+      margin-top:24px;text-align:left;background:#f5f7fb;
+      border-radius:10px;padding:16px 18px;
+    }
+    .sheet-guide h4{font-size:12px;font-weight:700;color:var(--primary);margin-bottom:8px;}
+    .sheet-guide .tab-row{display:flex;gap:6px;flex-wrap:wrap;}
+    .sheet-guide .tab-badge{
+      background:#e3f0ff;color:var(--accent);font-size:11px;font-weight:600;
+      padding:3px 8px;border-radius:4px;
+    }
+
+    /* ── HEADER ── */
+    header{
+      position:sticky;top:0;z-index:100;background:var(--primary);
+      display:flex;align-items:center;gap:14px;padding:0 24px;height:58px;
+      box-shadow:0 2px 8px rgba(0,0,0,.25);
+    }
+    .logo{color:#fff;font-size:15px;font-weight:700;white-space:nowrap;}
+    .logo span{color:#64b5f6;}
+    nav{display:flex;gap:5px;flex:1;}
+    nav button{
+      background:rgba(255,255,255,.12);border:none;color:#fff;
+      padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;
+      transition:background .15s;white-space:nowrap;
+    }
+    nav button.active,nav button:hover{background:rgba(255,255,255,.28);}
+    .hdr-right{display:flex;align-items:center;gap:8px;white-space:nowrap;}
+    .hdr-right label{color:rgba(255,255,255,.65);font-size:11px;}
+    #monthSelect{
+      background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+      color:#fff;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;outline:none;
+    }
+    #monthSelect option{background:#1a3a5c;}
+    .btn-refresh{
+      background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+      color:#fff;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;
+      transition:background .15s;
+    }
+    .btn-refresh:hover{background:rgba(255,255,255,.28);}
+    .btn-cfg{
+      background:rgba(255,200,0,.25);border:1px solid rgba(255,200,0,.4);
+      color:#ffe066;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;
+    }
+
+    /* ── PAGES ── */
+    .page{display:none;}
+    .page.active{display:block;}
+    main{max-width:1440px;margin:0 auto;padding:22px 20px 48px;}
+
+    /* ── SECTION TITLE ── */
+    .stitle{
+      font-size:14px;font-weight:700;color:var(--primary);
+      border-left:4px solid var(--accent);padding-left:10px;
+      margin:24px 0 13px;
+    }
+    .stitle:first-of-type{margin-top:0;}
+
+    /* ── KPI ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+    .kpi-card{background:var(--card);border-radius:12px;padding:15px 17px;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,.06);}
+    .k-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
+    .k-value{font-size:27px;font-weight:800;color:var(--primary);line-height:1;}
+    .k-unit{font-size:13px;font-weight:500;color:var(--muted);margin-left:2px;}
+    .k-delta{font-size:11px;margin-top:4px;color:var(--muted);}
+    .k-bar{height:4px;border-radius:2px;background:var(--border);margin-top:8px;}
+    .k-fill{height:100%;border-radius:2px;transition:width .4s;}
+
+    /* ── TECH BADGE ── */
+    .job-summary{display:flex;gap:12px;margin-bottom:12px;}
+    .jbadge{flex:1;padding:10px 14px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
+    .jbadge.tech{background:#e8f2fd;border:1px solid #b3d1f5;}
+    .jbadge.gen{background:#fef3e8;border:1px solid #f5d5a3;}
+    .jb-label{font-size:12px;font-weight:700;color:var(--primary);}
+    .jb-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+    .jb-count{font-size:20px;font-weight:800;}
+    .jbadge.tech .jb-count{color:var(--accent);}
+    .jbadge.gen  .jb-count{color:var(--accent3);}
+    .jb-pct{font-size:11px;color:var(--muted);margin-left:3px;}
+
+    /* ── CHARTS ── */
+    .cg{display:grid;gap:14px;}
+    .cg2{grid-template-columns:repeat(2,1fr);}
+    .cg3{grid-template-columns:repeat(3,1fr);}
+    .cg21{grid-template-columns:2fr 1fr;}
+    .cg12{grid-template-columns:1fr 2fr;}
+    .cc{background:var(--card);border-radius:12px;border:1px solid var(--border);padding:17px 19px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+    .cc h3{font-size:13px;font-weight:700;color:var(--primary);margin-bottom:3px;}
+    .cc .sub{font-size:11px;color:var(--muted);margin-bottom:12px;}
+    .cw{position:relative;}
+    .h160{height:160px;}.h200{height:200px;}.h220{height:220px;}
+    .h240{height:240px;}.h260{height:260px;}.h280{height:280px;}.h300{height:300px;}
+
+    /* ── PROGRESS ── */
+    .pr{display:flex;align-items:center;gap:9px;margin-bottom:8px;font-size:12px;}
+    .pr-label{flex-shrink:0;color:var(--text);font-weight:500;}
+    .pr-bar{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden;}
+    .pr-fill{height:100%;border-radius:4px;transition:width .4s;}
+    .pr-val{flex-shrink:0;text-align:right;color:var(--muted);font-weight:600;font-size:11px;}
+    .grade-sub{display:none;}
+
+    /* ── TABLE ── */
+    .tw{overflow-x:auto;}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    thead th{background:#f5f7fb;color:var(--muted);font-weight:600;padding:8px 11px;text-align:left;border-bottom:2px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+    tbody td{padding:8px 11px;border-bottom:1px solid var(--border);}
+    tbody tr:last-child td{border-bottom:none;}
+    tbody tr:hover{background:#f8f9fc;}
+    .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:600;}
+    .badge.blue{background:#e3f0ff;color:var(--accent);}
+    .badge.green{background:#e6f9f0;color:var(--accent2);}
+    .badge.orange{background:#fff3e3;color:var(--accent3);}
+    .badge.red{background:#fdeaea;color:var(--accent4);}
+
+    @media(max-width:900px){.cg2,.cg3,.cg21,.cg12{grid-template-columns:1fr;}header{flex-wrap:wrap;height:auto;padding:10px 14px;}}
+  </style>
+</head>
+<body>
+
+<!-- ════ LOADING OVERLAY ════ -->
+<div id="overlay">
+  <div class="spinner"></div>
+  <p id="overlay-msg">엑셀 파일 읽는 중...</p>
+</div>
+
+<!-- ════ FILE PICKER SCREEN ════ -->
+<div id="file-screen">
+  <div class="file-box">
+    <div class="icon">📊</div>
+    <h2>HR DATA BOOK</h2>
+    <p>인력현황 엑셀 파일을 불러오면<br>대시보드가 자동으로 표시됩니다.</p>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('xlsxInput').click()">
+      <div class="drop-icon">📂</div>
+      <p>여기에 엑셀 파일을 드래그하거나<br>클릭해서 파일을 선택하세요</p>
+    </div>
+    <input type="file" id="xlsxInput" accept=".xlsx,.xls" style="display:none" />
+    <div class="file-err" id="file-err"></div>
+    <div class="sheet-guide">
+      <h4>📋 엑셀 파일에 필요한 시트 탭 (7개)</h4>
+      <div class="tab-row">
+        <span class="tab-badge">요약</span>
+        <span class="tab-badge">직군별</span>
+        <span class="tab-badge">직급별</span>
+        <span class="tab-badge">인력구조</span>
+        <span class="tab-badge">입퇴사</span>
+        <span class="tab-badge">퇴사분석</span>
+        <span class="tab-badge">부서별</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="xlsxInput2" accept=".xlsx,.xls" style="display:none" />
+
+<header>
+  <div class="logo">HR <span>DATA BOOK</span></div>
+  <nav>
+    <button class="active" onclick="showPage('overview',event)">전사 현황</button>
+    <button onclick="showPage('structure',event)">인력 구조</button>
+    <button onclick="showPage('movement',event)">입퇴사 현황</button>
+    <button onclick="showPage('dept',event)">본부별 현황</button>
+    <button onclick="showPage('org',event)">조직도</button>
+    <button onclick="showPage('disabled',event)">장애인고용현황</button>
+  </nav>
+  <div class="hdr-right">
+    <label>기준월</label>
+    <select id="monthSelect" onchange="loadData(this.value)"></select>
+    <span id="file-name-label" style="font-size:11px;color:rgba(255,255,255,.55);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+    <button class="btn-refresh" onclick="document.getElementById('xlsxInput2').click()">📂 파일변경</button>
+  </div>
+</header>
+
+<!-- ════ PAGE 1: 전사 현황 ════ -->
+<div id="page-overview" class="page active"><main>
+  <div class="stitle">핵심 인력 지표</div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="k-label">총 임직원 수</div><div><span class="k-value" id="k-total">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="k-total-b" style="background:var(--accent)"></div></div></div>
+    <div class="kpi-card"><div class="k-label">정규직</div><div><span class="k-value" id="k-regular">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="k-regular-b" style="background:var(--accent2)"></div></div></div>
+    <div class="kpi-card"><div class="k-label">계약직</div><div><span class="k-value" id="k-contract">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="k-contract-b" style="background:var(--accent3)"></div></div></div>
+    <div class="kpi-card"><div class="k-label">임원</div><div><span class="k-value" id="k-exec">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="k-exec-b" style="background:#8e44ad"></div></div></div>
+    <div class="kpi-card"><div class="k-label">평균 연령</div><div><span class="k-value" id="k-age">-</span><span class="k-unit">세</span></div><div class="k-bar"><div class="k-fill" id="k-age-b" style="background:#9b59b6"></div></div></div>
+    <div class="kpi-card"><div class="k-label">평균 근속연수</div><div><span class="k-value" id="k-tenure">-</span><span class="k-unit">년</span></div><div class="k-bar"><div class="k-fill" id="k-tenure-b" style="background:#16a085"></div></div></div>
+    <div class="kpi-card">
+      <div class="k-label">퇴직률</div>
+      <div style="display:flex;align-items:baseline;gap:3px;flex-wrap:wrap">
+        <span class="k-value" id="k-attr">-</span><span class="k-unit">%</span>
+        <span id="k-attr-cum" style="font-size:13px;color:var(--accent4);font-weight:700"></span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px">당월 &nbsp;|&nbsp; (누적)</div>
+      <div class="k-bar"><div class="k-fill" id="k-attr-b" style="background:var(--accent4)"></div></div>
+    </div>
+  </div>
+
+  <div class="stitle">인력 추이 (2026년)</div>
+  <div class="cg cg21">
+    <div class="cc"><h3>월별 인원 추이</h3><p class="sub">정규직 / 계약직 / 임원 구분</p><div class="cw h260"><canvas id="trendChart"></canvas></div></div>
+    <div class="cc">
+      <h3>고용형태 구성</h3><p class="sub" id="et-sub"></p>
+      <div class="cw h160" style="margin-bottom:13px"><canvas id="empTypeChart"></canvas></div>
+      <div>
+        <div class="pr" style="--lw:52px"><span class="pr-label" style="width:52px">정규직</span><div class="pr-bar"><div class="pr-fill" id="et-r-bar" style="background:var(--accent)"></div></div><span class="pr-val" id="et-r-pct"></span></div>
+        <div class="pr"><span class="pr-label" style="width:52px">계약직</span><div class="pr-bar"><div class="pr-fill" id="et-c-bar" style="background:var(--accent3)"></div></div><span class="pr-val" id="et-c-pct"></span></div>
+        <div class="pr"><span class="pr-label" style="width:52px">임원</span><div class="pr-bar"><div class="pr-fill" id="et-f-bar" style="background:#8e44ad"></div></div><span class="pr-val" id="et-f-pct"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stitle">직군별 인원 현황</div>
+  <div class="job-summary">
+    <div class="jbadge tech"><div><div class="jb-label">🔵 TECH 직군</div><div class="jb-sub" id="tech-sub"></div></div><div><span class="jb-count" id="tech-total">-</span><span class="jb-pct" id="tech-pct"></span></div></div>
+    <div class="jbadge gen"><div><div class="jb-label">🟠 일반 직군</div><div class="jb-sub" id="gen-sub"></div></div><div><span class="jb-count" id="gen-total">-</span><span class="jb-pct" id="gen-pct"></span></div></div>
+  </div>
+  <div class="cg cg2">
+    <div class="cc"><h3>TECH 직군</h3><div class="cw h220"><canvas id="jobTechChart"></canvas></div></div>
+    <div class="cc"><h3>일반 직군</h3><div class="cw h220"><canvas id="jobGenChart"></canvas></div></div>
+  </div>
+</main></div>
+
+<!-- ════ PAGE 2: 인력 구조 ════ -->
+<div id="page-structure" class="page"><main>
+  <div class="stitle">직급별 인원</div>
+  <div class="cg cg2">
+    <div class="cc"><h3>직급별 인원</h3><div class="cw h240"><canvas id="gradeRLChart"></canvas></div></div>
+    <div class="cc" style="display:flex;align-items:center">
+      <div class="tw" style="width:100%">
+        <table><thead><tr><th>직급</th><th>인원(명)</th><th>비율</th></tr></thead>
+        <tbody>
+          <tr><td>계약직</td> <td id="gr-v0">-</td><td><span class="badge"        id="gr-p0"></span></td></tr>
+          <tr><td>D</td>      <td id="gr-v1">-</td><td><span class="badge blue"   id="gr-p1"></span></td></tr>
+          <tr><td>P1</td>     <td id="gr-v2">-</td><td><span class="badge blue"   id="gr-p2"></span></td></tr>
+          <tr><td>P2</td>     <td id="gr-v3">-</td><td><span class="badge blue"   id="gr-p3"></span></td></tr>
+          <tr><td>S</td>      <td id="gr-v4">-</td><td><span class="badge blue"   id="gr-p4"></span></td></tr>
+          <tr><td>팀장/PL</td><td id="gr-v5">-</td><td><span class="badge green"  id="gr-p5"></span></td></tr>
+          <tr><td>임원</td>   <td id="gr-v6">-</td><td><span class="badge orange" id="gr-p6"></span></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="stitle">연령 및 성별 분포</div>
+  <div class="cg cg2">
+    <div class="cc" style="display:flex;flex-direction:column"><h3>연령대별 인원 (성별 구분)</h3><p class="sub">연령대별 남성 / 여성 | 상단 숫자 = 연령대 합계 &nbsp;·&nbsp; 전체 평균 <strong id="stat-avg-age">-</strong>세</p><div class="cw" style="flex:1;min-height:200px"><canvas id="ageChart"></canvas></div></div>
+    <div class="cc">
+      <h3>성별 구성</h3><div class="cw h180"><canvas id="genderChart"></canvas></div>
+      <div style="margin-top:12px">
+        <div class="pr"><span class="pr-label" style="width:36px">남성</span><div class="pr-bar"><div class="pr-fill" id="g-m-bar" style="background:var(--accent)"></div></div><span class="pr-val" id="g-m-pct"></span></div>
+        <div class="pr"><span class="pr-label" style="width:36px">여성</span><div class="pr-bar"><div class="pr-fill" id="g-f-bar" style="background:#e91e8c"></div></div><span class="pr-val" id="g-f-pct"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stitle">근속연수 분포</div>
+  <div class="cc"><h3>근속연수 구간별 인원</h3><p class="sub">전체 평균 근속: <strong id="stat-avg-tenure">-</strong>년</p><div class="cw h220"><canvas id="tenureChart"></canvas></div></div>
+
+  <div class="stitle">학력별 현황</div>
+  <div class="cg cg2">
+    <div class="cc"><h3>학력별 구성</h3><div class="cw h220"><canvas id="eduChart"></canvas></div></div>
+    <div class="cc" style="display:flex;align-items:center">
+      <div class="tw" style="width:100%">
+        <table><thead><tr><th>학력</th><th>인원(명)</th><th>비율</th></tr></thead>
+        <tbody>
+          <tr><td>대학원 석사이상</td><td id="edu-v0">-</td><td><span class="badge blue" id="edu-p0"></span></td></tr>
+          <tr><td>대학교 (4년)</td>   <td id="edu-v1">-</td><td><span class="badge blue" id="edu-p1"></span></td></tr>
+          <tr><td>전문대 (2~3년)</td> <td id="edu-v2">-</td><td><span class="badge green" id="edu-p2"></span></td></tr>
+          <tr><td>고졸 이하</td>       <td id="edu-v3">-</td><td><span class="badge orange" id="edu-p3"></span></td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="stitle">장기 휴가 / 휴직자 현황</div>
+  <div class="cg cg2">
+    <div class="cc" style="display:flex;flex-direction:column"><h3>월별 장기 휴가/휴직자 현황</h3><p class="sub">출산휴가 · 질병휴가 · 육아휴직 · 질병휴직 · 명령휴직 구분</p><div class="cw" style="flex:1;min-height:220px"><canvas id="leaveChart"></canvas></div></div>
+    <div class="cc" id="leave-summary"></div>
+  </div>
+
+  <div class="stitle">근무지별 인원 현황</div>
+  <div class="cc">
+    <p class="sub" style="margin-bottom:10px">장기휴가/휴직자 제외 재직자 기준 (단위: 명)</p>
+    <div class="tw" id="location-table"></div>
+  </div>
+
+  <div class="stitle">퇴직연금 가입자 현황</div>
+  <div class="cg cg2">
+    <div class="cc" style="display:flex;flex-direction:column">
+      <h3>월별 DB / DC 추이</h3>
+      <p class="sub">DB : 확정급여형 &nbsp;·&nbsp; DC : 확정기여형</p>
+      <div class="cw" style="flex:1;min-height:200px"><canvas id="pensionChart"></canvas></div>
+    </div>
+    <div class="cc" style="display:flex;align-items:flex-start;flex-direction:column">
+      <h3>월별 가입 현황 <span style="font-size:11px;font-weight:400;color:#9ba8b5">(월말 기준)</span></h3>
+      <div class="tw" style="width:100%;margin-top:8px" id="pension-table"></div>
+      <div style="margin-top:10px;font-size:11px;color:#6b7a8d;line-height:1.8">
+        <div>※ '24년 말 : DB (519명, 93.2%) / DC (38명, 6.8%)</div>
+        <div>※ '25년 말 : DB (486명, 89.3%) / DC (58명, 10.7%)</div>
+      </div>
+    </div>
+  </div>
+</main></div>
+
+<!-- ════ PAGE 3: 입퇴사 현황 ════ -->
+<div id="page-movement" class="page"><main>
+  <div class="stitle">입퇴사 핵심 지표 (당해 누적)</div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="k-label">신규 입사</div><div><span class="k-value" id="mv-hire">-</span><span class="k-unit">명</span></div></div>
+    <div class="kpi-card"><div class="k-label">퇴사 (전체)</div><div><span class="k-value" id="mv-exit">-</span><span class="k-unit">명</span></div></div>
+    <div class="kpi-card"><div class="k-label">자발적 퇴사</div><div><span class="k-value" id="mv-vol">-</span><span class="k-unit">명</span></div></div>
+    <div class="kpi-card"><div class="k-label">비자발적 퇴사</div><div><span class="k-value" id="mv-invol">-</span><span class="k-unit">명</span></div></div>
+    <div class="kpi-card"><div class="k-label">누적 퇴직률</div><div><span class="k-value" id="mv-rate">-</span><span class="k-unit">%</span></div></div>
+    <div class="kpi-card"><div class="k-label">채용 충원율</div><div><span class="k-value" id="mv-fill">-</span><span class="k-unit">%</span></div></div>
+  </div>
+  <div class="stitle">월별 입퇴사 추이</div>
+  <div class="cc"><h3>월별 입사 / 퇴사 현황</h3><div class="cw h260"><canvas id="movChart"></canvas></div></div>
+  <div class="stitle">퇴사 분석</div>
+  <div class="cg cg2">
+    <div class="cc"><h3>퇴사 사유별 구성 <span style="font-size:11px;font-weight:400;color:#9ba8b5">(당해 누적)</span></h3><div class="cw h240"><canvas id="attrReasonChart"></canvas></div></div>
+    <div class="cc"><h3>퇴사자 직급별 분포 <span style="font-size:11px;font-weight:400;color:#9ba8b5">(당해 누적)</span></h3><div class="cw h240"><canvas id="attrGradeChart"></canvas></div></div>
+  </div>
+</main></div>
+
+<!-- ════ PAGE 6: 장애인고용현황 ════ -->
+<div id="page-disabled" class="page"><main>
+  <div class="stitle">장애인 고용 핵심 지표</div>
+  <p class="sub" style="margin-bottom:10px">법정 의무고용률 3.1% 기준 | 상시근로자 × 3.1% = 의무고용인원</p>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="k-label">상시근로자</div><div><span class="k-value" id="dis-total">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="dis-total-b" style="background:#3a6e8a"></div></div></div>
+    <div class="kpi-card"><div class="k-label">의무 고용인원</div><div><span class="k-value" id="dis-oblig">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="dis-oblig-b" style="background:#e67e22"></div></div></div>
+    <div class="kpi-card"><div class="k-label">실 고용인원</div><div><span class="k-value" id="dis-actual">-</span><span class="k-unit">명</span></div><div class="k-bar"><div class="k-fill" id="dis-actual-b" style="background:#27ae60"></div></div></div>
+    <div class="kpi-card"><div class="k-label">장애인 고용률</div><div><span class="k-value" id="dis-rate">-</span><span class="k-unit">%</span></div><div class="k-bar"><div class="k-fill" id="dis-rate-b" style="background:#2e86de"></div></div></div>
+    <div class="kpi-card"><div class="k-label">의무대비 초과/미달</div><div id="dis-diff-wrap"><span class="k-value" id="dis-diff">-</span><span class="k-unit">명</span></div></div>
+    <div class="kpi-card"><div class="k-label">고용부담금</div><div><span class="k-value" id="dis-charge">-</span><span class="k-unit">원</span></div></div>
+  </div>
+
+  <div class="stitle">월별 고용현황 추이</div>
+  <div class="cc">
+    <h3>의무고용인원 vs 실고용인원 · 고용률 추이</h3>
+    <p class="sub">막대: 의무/실고용 인원(명) | 꺾은선: 고용률(%) / 점선: 의무고용률 3.1%</p>
+    <div class="cw h280"><canvas id="disChart"></canvas></div>
+  </div>
+
+  <div class="stitle">일반직 / CE 구분 시뮬레이션</div>
+  <p class="sub" style="margin-bottom:10px">일반직 = 일반직 + QA + 힐링센터 &nbsp;|&nbsp; CE = 컨택센터 조직 내 상담직</p>
+  <div class="cc">
+    <div class="tw" id="dis-detail-table"></div>
+  </div>
+
+  <div class="stitle">상시근로자 산정 내역</div>
+  <p class="sub" style="margin-bottom:10px">근로소득인원 합계 − 제외인원 합계 = 상시근로자</p>
+  <div class="cc">
+    <div class="tw" id="dis-calc-table"></div>
+  </div>
+
+  <p class="sub" style="font-size:11px;color:#9ba8b5;margin-top:16px;line-height:1.7">
+    ※ 의무고용률 3.1% (2024년 기준) &nbsp;|&nbsp; 상시근로자 = 근로소득인원 − 제외인원(16일 이하·주말근무·휴직/정직·퇴직정산·일용직·등기이사)<br>
+    ※ 16일↓: 임금지급의 기초일수가 매월 16일 미만인 근로자는 상시근로자에서 제외 (단, 중증장애인 제외)<br>
+    ※ 부담금 = 미달인원 × 부담기초액 (초과 고용 시 부담금 없음)
+  </p>
+</main></div>
+
+<!-- ════ PAGE 5: 조직도 ════ -->
+<div id="page-org" class="page"><main>
+  <div class="stitle" style="display:flex;align-items:center;justify-content:space-between">
+    <span>전사 조직도</span>
+    <span style="display:flex;gap:8px;align-items:center">
+      <span id="org-date" style="font-size:12px;font-weight:500;color:#6b7a8d"></span>
+      <span id="org-badge" style="font-size:12px;background:#e8f0fe;color:#2e86de;padding:2px 10px;border-radius:12px;font-weight:600"></span>
+    </span>
+  </div>
+  <div id="org-chart-wrap" style="overflow-x:auto;padding:8px 0 16px">
+    <div id="org-chart"></div>
+  </div>
+  <p class="sub" style="font-size:11px;color:#9ba8b5;margin-top:4px">*TMS: Target Marketing &amp; Sales &nbsp;|&nbsp; *SHE: Safety/Health/Environment</p>
+</main></div>
+
+<!-- ════ PAGE 4: 본부별 현황 ════ -->
+<div id="page-dept" class="page"><main>
+  <div class="stitle">본부별 인원 현황</div>
+  <div class="cc"><h3>본부별 인원 (정규직 / 계약직)</h3><div class="cw h280"><canvas id="deptBarChart"></canvas></div></div>
+  <div class="stitle">본부별 상세 현황</div>
+  <div class="cc"><div class="tw">
+    <table>
+      <thead><tr><th>본부</th><th>인원</th><th>정규직</th><th>계약직</th><th>임원</th><th>평균연령</th><th>평균근속</th><th>입사<br><span style="font-weight:400;font-size:10px">당월(누적)</span></th><th>퇴사<br><span style="font-weight:400;font-size:10px">당월(누적)</span></th><th>퇴직률<br><span style="font-weight:400;font-size:10px">당월(누적)</span></th></tr></thead>
+      <tbody id="dept-tbody"></tbody>
+    </table>
+  </div></div>
+  <div class="stitle">본부별 성별 구성 비교</div>
+  <div class="cc"><h3>본부별 남녀 비율</h3><div id="dept-gender-pies" style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;padding:8px 0"></div></div>
+</main></div>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   ★ 엑셀 파일 기반 HR 대시보드
+   - 엑셀 파일(.xlsx)을 드래그하거나 선택하면 대시보드 표시
+   - 인터넷 연결 불필요, 서버 불필요
+   - 필요한 시트 탭 이름 (변경 시 아래 SHEET_TABS 수정)
+══════════════════════════════════════════════════════════════════ */
+const SHEET_TABS = {
+  요약:     '요약',
+  직군별:   '직군별',
+  직급별:   '직급별',
+  인력구조: '인력구조',
+  입퇴사:   '입퇴사',
+  퇴사분석: '퇴사분석',
+  부서별:   '부서별'
+};
+
+/* ── 선택 시트 (있으면 파싱, 없으면 하드코딩 기본값 유지) ──
+   매월 아래 시트에 행 또는 블록을 추가하면 대시보드가 자동 갱신됩니다.
+*/
+const OPTIONAL_TABS = {
+  장기휴직:   '장기휴직',
+  근무지:     '근무지',
+  장애인고용: '장애인고용',
+  장애인산정: '장애인산정',
+};
+
+/* ══════════════════════════════════════════════════════════
+   엑셀 시트별 컬럼 구조 (1행 = 헤더, 이 이름 그대로 사용)
+   ──────────────────────────────────────────────────────
+   [요약]   연월 | 총인원 | 정규직 | 계약직 | 기간제 | 평균연령 | 평균근속 |
+            퇴직률 | 입사누적 | 퇴사누적 | 자발적퇴사 | 비자발적퇴사 | 이직률 | 채용충원율
+   [직군별] 연월 | 구분(TECH/일반) | 직군명 | 인원
+   [직급별] 연월 | 직급(D/P1/P2/S/팀장PL/임원) | R | L
+   [인력구조] 연월 | 20대 | 30대 | 40대 | 50대이상 | 남성 | 여성 |
+              근속_1년미만 | 근속_1_3년 | 근속_3_5년 | 근속_5_10년 |
+              근속_10_15년 | 근속_15_20년 | 근속_20년이상 |
+              학력_대학원 | 학력_대학교 | 학력_전문대 | 학력_고졸이하
+   [입퇴사] 연월(집계기준) | 발생월(실제월) | 입사 | 퇴사   ← 둘 다 2026-06 형식
+   [퇴사분석] 연월 | 이직 | 건강 | 육아 | 휴식 | 개인사유 | 기타 | 계약만료 | 권고사직 | 정년퇴직 |
+              직급_계약직 | 직급_D | 직급_P1 | 직급_P2 | 직급_S | 직급_팀장PL | 직급_임원
+   [부서별] 연월 | 부서명 | 총인원 | 정규직 | 계약직 |
+            평균연령 | 평균근속 | 입사 | 퇴사 | 이직률 | 남성 | 여성
+
+   ── 선택 시트 (매월 행 추가) ──────────────────────────
+   [장기휴직]   연월 | 출산휴가 | 질병휴가 | 육아휴직 | 질병휴직
+   [근무지]     연월 | 씨티센터타워 | 드림빌 | 비지니스센터 | 한일오피스텔 |
+                계원빌딩 | 경기빌딩 | 원그로브빌딩 | SK하이닉스 | 세미콜론수송 |
+                KGIT센터 | 삼구아이앤씨 | 합계
+   [장애인고용] 연월 | 합산_상시근로자 | 합산_의무고용인원 | 합산_실고용인원 |
+                합산_고용률 | 합산_부담금액 | 일반_상시근로자 | 일반_의무고용인원 |
+                일반_실고용인원 | CE_상시근로자 | CE_의무고용인원 | CE_실고용인원
+   [장애인산정] 연월 | 순번(1~12) | 일반직 | CE
+                (순번1=급여지급, 2=퇴직정산, 3=일용직, 4=합계,
+                 5=16일↓, 6=주말근무, 7=휴직/정직, 8=퇴직정산,
+                 9=일용직, 10=기타(등기이사), 11=합계, 12=상시근로자)
+══════════════════════════════════════════════════════════ */
+
+/* ── 상수 ── */
+const GRADE_LABELS  = ['계약','D','P1','P2','S','팀장/PL','임원'];
+const GRADE_COLORS  = ['#e0e0e0','#1a3a5c','#2e4a7c','#2e86de','#5dade2','#aed6f1','#d6eaf8'];
+const TENURE_LABELS = ['1년 미만','1~3년','3~5년','5~10년','10~15년','15~20년','20년 이상'];
+const EDU_LABELS    = ['대학원 석사이상','대학교(4년)','전문대(2~3년)','고졸 이하'];
+const TECH_COLORS   = ['#1a3a5c','#2e86de','#5dade2','#aed6f1','#85c1e9'];
+const GEN_COLORS    = ['#e67e22','#27ae60','#8e44ad','#16a085','#e74c3c','#f39c12'];
+
+Chart.defaults.font.family = "'Apple SD Gothic Neo','Noto Sans KR',sans-serif";
+Chart.defaults.font.size   = 12;
+Chart.defaults.color       = '#6b7a8d';
+
+/* ── 전역 tooltip: 비율 표시 ── */
+Chart.defaults.plugins.tooltip.callbacks.label = function(ctx) {
+  const v = typeof ctx.parsed === 'object'
+    ? (ctx.parsed.y ?? ctx.parsed.x ?? 0)
+    : (ctx.parsed ?? 0);
+  if (v === null || v === undefined || v === '') return '';
+  const num = Number(v) || 0;
+
+  // 전체 합 계산 (차트 타입에 따라)
+  let total = 0;
+  const type = ctx.chart.config.type;
+  if (type === 'doughnut' || type === 'pie') {
+    total = ctx.chart.data.datasets[ctx.datasetIndex].data
+      .reduce((s, x) => s + (Number(x)||0), 0);
+  } else {
+    // 스택 여부 확인
+    const isStacked = ctx.chart.options.scales?.y?.stacked;
+    if (isStacked) {
+      // 해당 인덱스의 모든 데이터셋 합
+      total = ctx.chart.data.datasets
+        .reduce((s, ds) => s + (Number(ds.data[ctx.dataIndex])||0), 0);
+    } else {
+      total = ctx.dataset.data.reduce((s, x) => s + (Number(x)||0), 0);
+    }
+  }
+  const pct = total > 0 ? (num / total * 100).toFixed(1) : '0.0';
+  const label = ctx.dataset.label || ctx.label || '';
+  return `${label}: ${num.toLocaleString()}명 (${pct}%)`;
+};
+
+/* ── 스택 바 상단 합계 표시 플러그인 ── */
+const stackedTotalPlugin = {
+  id: 'stackedTotal',
+  afterDatasetsDraw(chart) {
+    if (!chart.options._showStackTotal) return;
+    const { ctx, data } = chart;
+    const totals = {};
+    data.datasets.forEach(ds => {
+      ds.data.forEach((v, i) => { totals[i] = (totals[i]||0) + (Number(v)||0); });
+    });
+    ctx.save();
+    ctx.font = 'bold 11px "Apple SD Gothic Neo","Noto Sans KR",sans-serif';
+    ctx.fillStyle = '#1f2d3d';
+    ctx.textAlign = 'center';
+    const lastMeta = chart.getDatasetMeta(data.datasets.length - 1);
+    Object.entries(totals).forEach(([i, total]) => {
+      if (!total) return;
+      const bar = lastMeta.data[+i];
+      if (bar) ctx.fillText(total.toLocaleString() + '명', bar.x, bar.y - 6);
+    });
+    ctx.restore();
+  }
+};
+Chart.register(stackedTotalPlugin);
+
+const charts = {};
+let _DATA = {};
+
+/* ══════════════════════════════════════════════════════════
+   엑셀 파일 읽기 (SheetJS — 로컬 파일, 인터넷 불필요)
+══════════════════════════════════════════════════════════ */
+function normDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+  return String(val).trim();
+}
+
+function readExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+        // 필수 탭 존재 확인
+        const missing = Object.values(SHEET_TABS).filter(t => !wb.Sheets[t]);
+        if (missing.length > 0) {
+          reject(new Error(`다음 시트 탭을 찾을 수 없습니다: ${missing.join(', ')}`));
+          return;
+        }
+        const sheets = {};
+        Object.entries(SHEET_TABS).forEach(([key, tabName]) => {
+          let rows = XLSX.utils.sheet_to_json(wb.Sheets[tabName], { defval: null });
+          // 날짜 컬럼 정규화 (YYYY-MM 문자열로 통일)
+          rows = rows.map(row => {
+            const r = { ...row };
+            ['연월', '발생월'].forEach(col => {
+              if (r[col] != null) r[col] = normDate(r[col]);
+            });
+            return r;
+          }).filter(row => Object.values(row).some(v => v !== null && v !== ''));
+          sheets[key] = rows;
+        });
+        // 선택 시트 파싱 (없으면 null)
+        Object.entries(OPTIONAL_TABS).forEach(([key, tabName]) => {
+          if (wb.Sheets[tabName]) {
+            let rows = XLSX.utils.sheet_to_json(wb.Sheets[tabName], { defval: null });
+            rows = rows.map(row => {
+              const r = { ...row };
+              if (r['연월'] != null) r['연월'] = normDate(r['연월']);
+              return r;
+            }).filter(row => Object.values(row).some(v => v !== null && v !== ''));
+            sheets[key] = rows;
+          } else {
+            sheets[key] = null;
+          }
+        });
+        resolve(sheets);
+      } catch (err) {
+        reject(new Error('파일 읽기 오류: ' + err.message));
+      }
+    };
+    reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
+   데이터 변환 (엑셀 시트 → 대시보드 DATA 포맷)
+══════════════════════════════════════════════════════════ */
+function buildData(raw) {
+  const months = [...new Set(raw.요약.map(r => r['연월']))].sort((a, b) => b.localeCompare(a));
+  const data = {};
+
+  months.forEach(month => {
+    const k   = raw.요약.find(r => r['연월'] === month) || {};
+    const s   = raw.인력구조.find(r => r['연월'] === month) || {};
+
+    const jgRows   = raw.직군별.filter(r => r['연월'] === month);
+    const grRows   = raw.직급별.filter(r => r['연월'] === month);
+    const movRows  = raw.입퇴사.filter(r => r['연월'] === month).sort((a, b) => String(a['발생월']).localeCompare(String(b['발생월'])));
+    const deptRows = raw.부서별.filter(r => r['연월'] === month);
+
+    // 퇴사분석 누적 합산 (해당 월 포함 이전 전체)
+    const mvcum = {};
+    raw.퇴사분석.filter(r => String(r['연월']) <= String(month)).forEach(row => {
+      for (const [k2, v] of Object.entries(row)) {
+        if (k2 !== '연월') mvcum[k2] = (mvcum[k2] || 0) + (Number(v) || 0);
+      }
+    });
+
+    // 본부별 누적 입사/퇴사
+    const deptCumMap = {};
+    raw.부서별.filter(r => String(r['연월']) <= String(month)).forEach(r => {
+      const nm = r['부서명'];
+      if (!deptCumMap[nm]) deptCumMap[nm] = { hire: 0, exit: 0 };
+      deptCumMap[nm].hire += Number(r['입사']) || 0;
+      deptCumMap[nm].exit += Number(r['퇴사']) || 0;
+    });
+
+    const techItems = jgRows.filter(r => r['구분'] === 'TECH');
+    const genTotal  = jgRows.filter(r => r['구분'] === '일반').reduce((s, r) => s + (r['인원']||0), 0);
+
+    data[month] = {
+      kpi: {
+        total:         k['총인원']      || 0,
+        regular:       k['정규직']      || 0,
+        contract:      k['계약직']      || 0,
+        exec:          k['임원']        || 0,
+        avgAge:        k['평균연령']    || 0,
+        avgTenure:     k['평균근속']    || 0,
+        attritionRate: k['퇴직률']      || 0,
+        attritionCum:  k['이직률(누적)'] || 0
+      },
+      empType: [k['정규직'] || 0, k['계약직'] || 0, k['임원'] || 0],
+
+      jobGroup: {
+        tech:    { labels: techItems.map(r => r['직군명']), values: techItems.map(r => r['인원']) },
+        general: { labels: ['일반 직군'], values: [genTotal] }
+      },
+
+      grade: {
+        R:     GRADE_LABELS.map(lbl => { const g = grRows.find(r => r['직급'] === lbl); return g ? (g['R']||0) : 0; }),
+        L:     GRADE_LABELS.map(lbl => { const g = grRows.find(r => r['직급'] === lbl); return g ? (g['L']||0) : 0; }),
+        total: GRADE_LABELS.map(lbl => { const g = grRows.find(r => r['직급'] === lbl); return g ? ((g['R']||0)+(g['L']||0)) : 0; })
+      },
+
+      age:    [s['20대']||0, s['30대']||0, s['40대']||0, s['50대이상']||0],
+      ageByGender: {
+        male:   [s['20대_남']||0, s['30대_남']||0, s['40대_남']||0, s['50대이상_남']||0],
+        female: [s['20대_여']||0, s['30대_여']||0, s['40대_여']||0, s['50대이상_여']||0]
+      },
+      gender: [s['남성']||0, s['여성']||0],
+      tenure: [s['근속_1년미만']||0, s['근속_1_3년']||0, s['근속_3_5년']||0, s['근속_5_10년']||0, s['근속_10_15년']||0, s['근속_15_20년']||0, s['근속_20년이상']||0],
+      edu:    [s['학력_대학원']||0, s['학력_대학교']||0, s['학력_전문대']||0, s['학력_고졸이하']||0],
+
+      yearlyTrend: computeYearlyTrend(raw.요약),
+
+      movement: {
+        hire:     k['입사누적']      || 0,
+        exit:     k['퇴사누적']      || 0,
+        volExit:  k['자발적퇴사']    || 0,
+        involExit:k['비자발적퇴사']  || 0,
+        rate:     k['이직률(누적)']   || 0,
+        fillRate: k['채용충원율']    || 0
+      },
+
+      monthlyMov: {
+        labels: movRows.map(r => String(r['발생월']).replace(/^\d{4}-0?/, '') + '월'),
+        hire:   movRows.map(r => r['입사']),
+        exit:   movRows.map(r => r['퇴사'])
+      },
+
+      attrReason: [
+        mvcum['이직']||0, mvcum['건강']||0, mvcum['육아']||0, mvcum['휴식']||0,
+        mvcum['개인사유']||0, mvcum['기타']||0,
+        mvcum['계약만료']||0, mvcum['권고사직']||0, mvcum['정년퇴직']||0
+      ],
+      attrGrade: [
+        mvcum['직급_계약직']||0, mvcum['직급_D']||0, mvcum['직급_P1']||0,
+        mvcum['직급_P2']||0, mvcum['직급_S']||0, mvcum['직급_팀장PL']||0, mvcum['직급_임원']||0
+      ],
+
+      dept: deptRows.map(r => {
+        const cum = deptCumMap[r['부서명']] || { hire: 0, exit: 0 };
+        const tot = r['총인원'] || 1;
+        return {
+          name: r['부서명'], total: r['총인원'], regular: r['정규직'], contract: r['계약직'],
+          exec: r['임원'] || 0,
+          avgAge: r['평균연령'], avgTenure: r['평균근속'],
+          hire: r['입사'] || 0, exit: r['퇴사'] || 0, rate: r['이직률'] || 0,
+          hireCum: cum.hire, exitCum: cum.exit,
+          rateCum: +(cum.exit / tot * 100).toFixed(2)
+        };
+      }),
+      deptGender: {
+        male:   deptRows.map(r => r['남성']),
+        female: deptRows.map(r => r['여성'])
+      }
+    };
+  });
+
+  return { data, months };
+}
+
+function computeYearlyTrend(summaryRows) {
+  // 월별 추이 (전체 월 데이터 사용)
+  const sorted = [...summaryRows].sort((a,b) => String(a['연월']).localeCompare(String(b['연월'])));
+  return {
+    years:    sorted.map(r => String(r['연월']).replace(/^(\d{4})-0?(\d+)$/, '$1년 $2월')),
+    regular:  sorted.map(r => r['정규직']  || 0),
+    contract: sorted.map(r => r['계약직']  || 0),
+    exec:     sorted.map(r => r['임원']    || 0)
+  };
+}
+
+/* ══════════════════════════════════════════════════════════
+   데이터 로드 & 렌더링
+══════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const st = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+const sb = (id, p) => { const e = $(id); if (e) e.style.width = Math.min(100, Math.max(0, p)) + '%'; };
+const pc = (v, t)  => t ? (v / t * 100).toFixed(1) + '%' : '-';
+
+function loadData(month) {
+  const d = _DATA[month]; if (!d) return;
+  const [y, mo] = month.split('-');
+
+  // KPI
+  st('k-total',    d.kpi.total.toLocaleString());
+  st('k-regular',  d.kpi.regular.toLocaleString());
+  st('k-contract', d.kpi.contract.toLocaleString());
+  st('k-exec',     d.kpi.exec.toLocaleString());
+  st('k-age',      d.kpi.avgAge.toFixed(1));
+  st('k-tenure',   d.kpi.avgTenure.toFixed(1));
+  st('stat-avg-age',    d.kpi.avgAge.toFixed(1));
+  st('stat-avg-tenure', d.kpi.avgTenure.toFixed(1));
+  st('k-attr',     d.kpi.attritionRate.toFixed(2));
+  st('k-attr-cum', `(${d.kpi.attritionCum.toFixed(2)}%)`);
+  sb('k-total-b',   75);
+  sb('k-regular-b', d.kpi.regular / d.kpi.total * 100);
+  sb('k-contract-b',d.kpi.contract / d.kpi.total * 100);
+  sb('k-exec-b',    d.kpi.exec / d.kpi.total * 100);
+  sb('k-age-b',     d.kpi.avgAge);
+  sb('k-tenure-b',  d.kpi.avgTenure * 6);
+  sb('k-attr-b',    d.kpi.attritionRate * 10);
+
+  // 고용형태
+  st('et-sub', `${y}년 ${parseInt(mo)}월 기준`);
+  const etSum = d.empType.reduce((a, b) => a + b, 0);
+  upd('empTypeChart', [d.empType]);
+  sb('et-r-bar', d.empType[0] / etSum * 100);
+  sb('et-c-bar', d.empType[1] / etSum * 100);
+  sb('et-f-bar', d.empType[2] / etSum * 100);
+  st('et-r-pct', pc(d.empType[0], etSum));
+  st('et-c-pct', pc(d.empType[1], etSum));
+  st('et-f-pct', pc(d.empType[2], etSum));
+  // 임원 표시
+  $('et-r-pct').textContent = `${d.empType[0].toLocaleString()}명 (${pc(d.empType[0], etSum)})`;
+  $('et-c-pct').textContent = `${d.empType[1].toLocaleString()}명 (${pc(d.empType[1], etSum)})`;
+  $('et-f-pct').textContent = `${d.empType[2].toLocaleString()}명 (${pc(d.empType[2], etSum)})`;
+
+  // 월별 추이
+  updFull('trendChart', d.yearlyTrend.years, [d.yearlyTrend.regular, d.yearlyTrend.contract, d.yearlyTrend.exec]);
+
+  // 직군
+  const techSum = d.jobGroup.tech.values.reduce((a, b) => a + b, 0);
+  const genSum  = d.jobGroup.general.values[0] || 0;
+  const allSum  = techSum + genSum;
+  st('tech-total', techSum.toLocaleString() + '명'); st('tech-pct', `(${(techSum/allSum*100).toFixed(1)}%)`);
+  st('tech-sub',   'Tech');
+  st('gen-total',  genSum.toLocaleString() + '명');  st('gen-pct', `(${(genSum/allSum*100).toFixed(1)}%)`);
+  st('gen-sub',    '사업 · 기획 · CS · 임원');
+  updFull('jobTechChart', d.jobGroup.tech.labels, [d.jobGroup.tech.values]);
+  updFull('jobGenChart',  ['일반 직군'],            [[genSum]]);
+
+  // 직급 (합계만 표시)
+  updFull('gradeRLChart', GRADE_LABELS, [d.grade.total]);
+  const grTotal = d.grade.total.reduce((a, b) => a + b, 0);
+  GRADE_LABELS.forEach((lbl, i) => {
+    const v = d.grade.total[i] || 0;
+    st(`gr-v${i}`, v.toLocaleString());
+    st(`gr-p${i}`, pc(v, grTotal));
+  });
+
+  // 연령대 (성별 스택)
+  upd('ageChart', [d.ageByGender.male, d.ageByGender.female]);
+
+  // 성별
+  upd('genderChart', [d.gender]);
+  const gSum = d.gender[0] + d.gender[1];
+  sb('g-m-bar', d.gender[0]/gSum*100); sb('g-f-bar', d.gender[1]/gSum*100);
+  st('g-m-pct', pc(d.gender[0], gSum)); st('g-f-pct', pc(d.gender[1], gSum));
+
+  // 근속·학력
+  upd('tenureChart', [d.tenure]);
+  upd('eduChart', [d.edu]);
+  const eduSum = d.edu.reduce((a, b) => a + b, 0);
+  d.edu.forEach((v, i) => { st(`edu-v${i}`, v.toLocaleString()); st(`edu-p${i}`, pc(v, eduSum)); });
+
+  // ── 장기 휴가/휴직자 요약 (기준월 동기화) ──
+  (function(){
+    const mIdx = LEAVE_MONTHS.indexOf(month);
+    const panel = $('leave-summary'); if(!panel) return;
+    if(mIdx < 0){ panel.innerHTML = '<p class="sub" style="padding:16px">해당 월의 휴직자 데이터가 없습니다.</p>'; return; }
+    const L = LEAVE_D;
+    const moLabel = `26년 ${parseInt(mo)}월`;
+    const hol = L.출산휴가[mIdx] + L.질병휴가[mIdx];
+    const lv  = L.육아휴직[mIdx] + L.질병휴직[mIdx] + (L.명령휴직?.[mIdx]||0);
+    const tot = hol + lv;
+    panel.innerHTML = `
+      <h3>${moLabel} 현황 요약</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0 16px">
+        <div style="text-align:center;padding:12px 8px;background:#f0f4fa;border-radius:8px">
+          <div style="font-size:11px;color:#6b7a8d;margin-bottom:4px">전체</div>
+          <div style="font-size:28px;font-weight:700;color:var(--primary)">${tot}</div>
+          <div style="font-size:11px;color:#9ba8b5">명</div>
+        </div>
+        <div style="text-align:center;padding:12px 8px;background:#fef0f7;border-radius:8px">
+          <div style="font-size:11px;color:#6b7a8d;margin-bottom:4px">장기 휴가</div>
+          <div style="font-size:28px;font-weight:700;color:#e91e8c">${hol}</div>
+          <div style="font-size:11px;color:#9ba8b5">명</div>
+        </div>
+        <div style="text-align:center;padding:12px 8px;background:#eaf3fd;border-radius:8px">
+          <div style="font-size:11px;color:#6b7a8d;margin-bottom:4px">장기 휴직</div>
+          <div style="font-size:28px;font-weight:700;color:#2e86de">${lv}</div>
+          <div style="font-size:11px;color:#9ba8b5">명</div>
+        </div>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>구분</th><th style="text-align:right">${moLabel}</th></tr></thead>
+          <tbody>
+            <tr><td>출산휴가</td><td style="text-align:right"><strong>${L.출산휴가[mIdx]}</strong></td></tr>
+            <tr><td>질병휴가</td><td style="text-align:right"><strong>${L.질병휴가[mIdx]}</strong></td></tr>
+            <tr style="color:#6b7a8d;font-size:12px;background:#f8f9fb"><td>┗ 장기휴가 소계</td><td style="text-align:right"><strong>${hol}</strong></td></tr>
+            <tr><td>육아휴직</td><td style="text-align:right"><strong>${L.육아휴직[mIdx]}</strong></td></tr>
+            <tr><td>질병휴직</td><td style="text-align:right"><strong>${L.질병휴직[mIdx]}</strong></td></tr>
+            ${(L.명령휴직?.[mIdx]||0)>0?`<tr><td>명령휴직</td><td style="text-align:right"><strong>${L.명령휴직[mIdx]}</strong></td></tr>`:''}
+            <tr style="color:#6b7a8d;font-size:12px;background:#f8f9fb"><td>┗ 장기휴직 소계</td><td style="text-align:right"><strong>${lv}</strong></td></tr>
+            <tr style="font-weight:700"><td>합계</td><td style="text-align:right">${tot}</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+  })();
+
+  // ── 근무지별 인원 현황 (기준월까지만 표시) ──
+  (function(){
+    const tbl = $('location-table'); if(!tbl) return;
+    const mIdx = LOC_MONTHS.indexOf(month);
+    const visMonths = mIdx >= 0 ? mIdx + 1 : LOC_MONTHS.length;
+    const MLABELS = LOC_MONTHS.map(m => { const mo=m.split('-')[1]; return `${parseInt(mo)}월`; });
+    const colHdr = MLABELS.slice(0, visMonths).map(m => `<th style="text-align:right">${m}</th>`).join('');
+    let html = `<table><thead><tr><th>구분</th><th>근무지</th>${colHdr}</tr></thead><tbody>`;
+    LOC_ROWS.forEach(r => {
+      const groupCell = r.rs > 0
+        ? `<td rowspan="${r.rs}" style="vertical-align:middle;font-size:12px">${r.group}${r.gsub?`<br><span style="color:#9ba8b5;font-size:11px">${r.gsub}</span>`:''}</td>`
+        : '';
+      const dataCells = r.c.slice(0, visMonths).map(v => `<td style="text-align:right">${v}</td>`).join('');
+      html += `<tr>${groupCell}<td>${r.loc}</td>${dataCells}</tr>`;
+    });
+    const totalCells = LOC_TOTAL.slice(0, visMonths).map(v => `<td style="text-align:right">${v}</td>`).join('');
+    html += `<tr style="font-weight:700;background:#f0f4fa"><td colspan="2">총계 (재직자 기준)</td>${totalCells}</tr>`;
+    html += `</tbody></table>`;
+    tbl.innerHTML = html;
+  })();
+
+  // ── 퇴직연금 테이블 (기준월까지 표시) ──
+  (function(){
+    const tbl = $('pension-table'); if(!tbl) return;
+    const mIdx = PENSION_MONTHS.indexOf(month);
+    const vis = mIdx >= 0 ? mIdx + 1 : PENSION_MONTHS.length;
+    const hdrs = PENSION_LABELS.slice(0, vis).map(l => `<th style="text-align:right">${l}</th>`).join('');
+    let html = `<table><thead><tr><th>구분</th>${hdrs}</tr></thead><tbody>`;
+    // DB
+    html += `<tr><td><strong>DB</strong><br><span style="color:#9ba8b5;font-size:10px">확정급여형</span></td>`;
+    for(let i=0;i<vis;i++) html += `<td style="text-align:right">${PENSION_DATA.DB.cnt[i].toLocaleString()}<br><span style="color:#2e86de;font-size:10px">(${PENSION_DATA.DB.pct[i]}%)</span></td>`;
+    html += `</tr>`;
+    // DC
+    html += `<tr><td><strong>DC</strong><br><span style="color:#9ba8b5;font-size:10px">확정기여형</span></td>`;
+    for(let i=0;i<vis;i++) html += `<td style="text-align:right">${PENSION_DATA.DC.cnt[i].toLocaleString()}<br><span style="color:#27ae60;font-size:10px">(${PENSION_DATA.DC.pct[i]}%)</span></td>`;
+    html += `</tr>`;
+    // 총계
+    html += `<tr style="font-weight:700;background:#f0f4fa"><td>총계</td>`;
+    for(let i=0;i<vis;i++) html += `<td style="text-align:right">${PENSION_DATA.total.cnt[i].toLocaleString()}</td>`;
+    html += `</tr></tbody></table>`;
+    tbl.innerHTML = html;
+    // 차트 업데이트
+    const pc = charts['pensionChart'];
+    if(pc){
+      pc.data.labels = PENSION_LABELS.slice(0,vis);
+      pc.data.datasets[0].data = PENSION_DATA.DB.cnt.slice(0,vis);
+      pc.data.datasets[1].data = PENSION_DATA.DC.cnt.slice(0,vis);
+      pc.update('none');
+    }
+  })();
+
+  // 입퇴사
+  st('mv-hire', d.movement.hire); st('mv-exit', d.movement.exit);
+  st('mv-vol',  d.movement.volExit); st('mv-invol', d.movement.involExit);
+  st('mv-rate', d.movement.rate.toFixed(2)); st('mv-fill', d.movement.fillRate.toFixed(1));
+  const mc = charts['movChart'];
+  if (mc && d.monthlyMov) {
+    mc.data.labels = d.monthlyMov.labels;
+    mc.data.datasets[0].data = d.monthlyMov.hire;
+    mc.data.datasets[1].data = d.monthlyMov.exit;
+    mc.update('none');
+  }
+  upd('attrReasonChart', [d.attrReason]);
+  updFull('attrGradeChart', ['계약직','D','P1','P2','S','팀장/PL','임원'], [d.attrGrade]);
+
+  // 조직도
+  renderOrgChart(month);
+
+  // ── 장애인고용현황 (기준월 동기화) ──
+  (function(){
+    const mIdx = DIS_MONTHS.indexOf(month);
+    if(mIdx < 0) return;
+    const moLabel = `26년 ${parseInt(mo)}월`;
+
+    // KPI
+    const total  = DIS_SIM.상시근로자[mIdx];
+    const oblig  = DIS_SIM.의무고용인원[mIdx];
+    const actual = DIS_SIM.실고용인원[mIdx];
+    const rate   = DIS_SIM.고용률[mIdx];
+    const diff   = actual - oblig;
+    const charge = DIS_SIM.부담금액[mIdx];
+
+    st('dis-total',  total.toLocaleString());
+    st('dis-oblig',  oblig);
+    st('dis-actual', actual);
+    st('dis-rate',   rate.toFixed(3));
+    st('dis-charge', charge === 0 ? '없음' : charge.toLocaleString());
+
+    sb('dis-total-b',  75);
+    sb('dis-oblig-b',  oblig / total * 100 * 10);
+    sb('dis-actual-b', actual / total * 100 * 10);
+    sb('dis-rate-b',   (rate / 5) * 100);
+
+    const diffEl = $('dis-diff'); const wrapEl = $('dis-diff-wrap');
+    if(diffEl) {
+      const isOver = diff >= 0;
+      diffEl.textContent = (isOver ? '+' : '') + diff.toFixed(2);
+      if(wrapEl) wrapEl.style.color = isOver ? '#27ae60' : '#e74c3c';
+      const badge = isOver
+        ? `<span class="badge green" style="margin-left:6px">초과</span>`
+        : `<span class="badge orange" style="margin-left:6px">미달</span>`;
+      if(wrapEl) wrapEl.innerHTML = `<span class="k-value" id="dis-diff">${(isOver?'+':'')+diff.toFixed(2)}</span><span class="k-unit">명</span>${badge}`;
+    }
+
+    // 일반직/CE 시뮬레이션 테이블 (기준월까지 컬럼 표시)
+    const tbl = $('dis-detail-table'); if(!tbl) return;
+    const visN = mIdx + 1;
+    const colHdr = DIS_LABELS.slice(0, visN).map(l=>`<th style="text-align:right">${l}</th>`).join('');
+    const fmt = (v, dec=0) => typeof v==='number' ? (dec? v.toFixed(dec) : v) : '-';
+    const diffClass = (v) => v >= 0 ? 'color:#27ae60;font-weight:700' : 'color:#e74c3c;font-weight:700';
+
+    const rows = [
+      { group:'일반직', label:'상시근로자(명)',  data: DIS_일반.상시근로자.slice(0,visN),   dec:0 },
+      { group:'',       label:'의무고용인원(명)', data: DIS_일반.의무고용인원.slice(0,visN), dec:2 },
+      { group:'',       label:'실고용인원(명)',  data: DIS_일반.실고용인원.slice(0,visN),   dec:0 },
+      { group:'',       label:'초과/미달(명)',   data: DIS_일반.실고용인원.map((v,i)=>v-DIS_일반.의무고용인원[i]).slice(0,visN), dec:2, diff:true },
+      { group:'CE',     label:'상시근로자(명)',  data: DIS_CE.상시근로자.slice(0,visN),     dec:0 },
+      { group:'',       label:'의무고용인원(명)', data: DIS_CE.의무고용인원.slice(0,visN),   dec:2 },
+      { group:'',       label:'실고용인원(명)',  data: DIS_CE.실고용인원.slice(0,visN),     dec:0 },
+      { group:'',       label:'초과/미달(명)',   data: DIS_CE.실고용인원.map((v,i)=>v-DIS_CE.의무고용인원[i]).slice(0,visN), dec:2, diff:true },
+      { group:'합산',   label:'상시근로자(명)',  data: DIS_SIM.상시근로자.slice(0,visN),    dec:0, bold:true },
+      { group:'',       label:'의무고용인원(명)', data: DIS_SIM.의무고용인원.slice(0,visN),  dec:0, bold:true },
+      { group:'',       label:'실고용인원(명)',  data: DIS_SIM.실고용인원.slice(0,visN),    dec:0, bold:true },
+      { group:'',       label:'초과/미달(명)',   data: DIS_SIM.실고용인원.map((v,i)=>v-DIS_SIM.의무고용인원[i]).slice(0,visN), dec:2, diff:true, bold:true },
+      { group:'',       label:'고용률(%)',       data: DIS_SIM.고용률.slice(0,visN),        dec:3, bold:true },
+    ];
+
+    let html = `<table>
+      <thead><tr><th>구분</th><th>항목</th>${colHdr}</tr></thead>
+      <tbody>`;
+    const grpColors = { '일반직':'#eaf3fd', 'CE':'#f0faf4', '합산':'#f0f4fa' };
+    let lastGrp = '';
+    rows.forEach(r => {
+      const grp = r.group || lastGrp;
+      if(r.group) lastGrp = r.group;
+      const bg = grpColors[grp] || '#fff';
+      const isBold = r.bold ? 'font-weight:700;' : '';
+      html += `<tr>
+        <td style="font-size:12px;background:${bg};${isBold}white-space:nowrap">${r.group||''}</td>
+        <td style="font-size:12px;background:${bg};${isBold}white-space:nowrap">${r.label}</td>
+        ${r.data.map(v => {
+          if(r.diff){
+            const sign = v>=0?'+':''; const col = v>=0?'#27ae60':'#e74c3c';
+            return `<td style="text-align:right;font-weight:700;color:${col};background:${bg}">${sign}${fmt(v,r.dec)}</td>`;
+          }
+          return `<td style="text-align:right;${isBold}background:${bg}">${fmt(v,r.dec)}</td>`;
+        }).join('')}
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    tbl.innerHTML = html;
+
+    // 상시근로자 산정 테이블
+    const calcTbl = $('dis-calc-table'); if(!calcTbl) return;
+    const CALC_MONTHS = DIS_LABELS.slice(0, visN);
+    let ch = `<table>
+      <thead>
+        <tr>
+          <th rowspan="2">구분</th><th rowspan="2">항목</th>
+          ${CALC_MONTHS.map(l=>`<th colspan="2" style="text-align:center">${l}</th>`).join('')}
+        </tr>
+        <tr>${CALC_MONTHS.map(()=>'<th style="text-align:right">일반직</th><th style="text-align:right">CE</th>').join('')}</tr>
+      </thead><tbody>`;
+
+    let lastCat = '';
+    DIS_CALC.rows.forEach(r => {
+      const cat = r.cat || lastCat;
+      if(r.cat) lastCat = r.cat;
+      const isBold = r.bold ? 'font-weight:700;' : '';
+      const hl = r.highlight ? 'background:#e8f0fe;' : (r.bold ? 'background:#f8f9fb;' : '');
+      ch += `<tr>
+        <td style="font-size:12px;${isBold}${hl}white-space:nowrap">${r.cat||''}</td>
+        <td style="font-size:12px;${isBold}${hl}white-space:nowrap">${r.label||'상시근로자'}</td>
+        ${Array.from({length:visN}, (_,i) => `
+          <td style="text-align:right;${isBold}${hl}">${r.일반[i]||0}</td>
+          <td style="text-align:right;${isBold}${hl};color:#1e7e5e">${r.CE[i]||0}</td>`
+        ).join('')}
+      </tr>`;
+    });
+    ch += `</tbody></table>`;
+    calcTbl.innerHTML = ch;
+  })();
+
+  // 부서별 인원 바 차트 (전체 인원 상단 표기)
+  const dn = d.dept.map(r => r.name);
+  (function(){
+    const ctx = $('deptBarChart'); if(!ctx) return;
+    if(charts['deptBarChart']) charts['deptBarChart'].destroy();
+    const totals = d.dept.map(r => r.total);
+    const totalLabelPlugin = {
+      id:'deptTotalLabels',
+      afterDatasetsDraw(chart){
+        const {ctx:c, data} = chart;
+        const lastDs = chart.getDatasetMeta(data.datasets.length-1);
+        c.save(); c.font='bold 11px sans-serif'; c.fillStyle='#1a3a5c'; c.textAlign='center';
+        totals.forEach((tot,i)=>{
+          const bar = lastDs.data[i];
+          if(bar) c.fillText(tot+'명', bar.x, bar.y-5);
+        });
+        c.restore();
+      }
+    };
+    charts['deptBarChart'] = new Chart(ctx, {
+      type:'bar',
+      data:{ labels:dn,
+        datasets:[{ label:'정규직', data:d.dept.map(r=>r.regular), backgroundColor:'#2e86de', borderRadius:4 },
+                  { label:'계약직', data:d.dept.map(r=>r.contract), backgroundColor:'#e67e22', borderRadius:4 }]},
+      options:{ responsive:true, maintainAspectRatio:false, layout:{padding:{top:22}},
+        plugins:{legend:{position:'top',labels:{boxWidth:12}}},
+        scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,grace:'10%'}} },
+      plugins:[totalLabelPlugin]
+    });
+  })();
+
+  // 부서별 성별 파이 차트 (본부별 doughnut)
+  (function(){
+    const container = $('dept-gender-pies'); if(!container) return;
+    // 기존 성별 파이 차트 제거
+    Object.keys(charts).filter(k=>k.startsWith('dg_')).forEach(k=>{charts[k].destroy();delete charts[k];});
+    container.innerHTML = '';
+    d.dept.forEach((dept, i) => {
+      const male = d.deptGender.male[i]||0;
+      const female = d.deptGender.female[i]||0;
+      const total = male + female || 1;
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'text-align:center;min-width:140px;flex:1;max-width:180px';
+      wrap.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:4px">${dept.name}</div>
+        <div style="position:relative;height:130px"><canvas id="dg_${i}"></canvas></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">
+          남 ${male}명 (${(male/total*100).toFixed(1)}%) / 여 ${female}명 (${(female/total*100).toFixed(1)}%)
+        </div>`;
+      container.appendChild(wrap);
+      const cv = document.getElementById(`dg_${i}`);
+      if(cv) charts[`dg_${i}`] = new Chart(cv, {
+        type:'doughnut',
+        data:{labels:['남성','여성'],datasets:[{data:[male,female],backgroundColor:['#2e86de','#e91e8c'],borderWidth:0,cutout:'55%'}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10}}},
+            tooltip:{callbacks:{label:c=>`${c.label}: ${c.parsed}명 (${(c.parsed/total*100).toFixed(1)}%)`}}}}
+      });
+    });
+  })();
+  const tbody = $('dept-tbody');
+  tbody.innerHTML = d.dept.map(r => `
+    <tr><td><b>${r.name}</b></td><td>${r.total}</td><td>${r.regular}</td><td>${r.contract}</td><td>${r.exec}</td>
+    <td>${r.avgAge}세</td><td>${r.avgTenure}년</td>
+    <td>${r.hire}<span style="color:#9ba8b5;font-size:10px">(${r.hireCum})</span></td>
+    <td>${r.exit}<span style="color:#9ba8b5;font-size:10px">(${r.exitCum})</span></td>
+    <td><span class="badge ${r.rate==0?'blue':r.rate<1?'green':r.rate<2?'orange':'red'}">${r.rate}%<span style="opacity:.7;font-size:10px">(${r.rateCum}%)</span></span></td></tr>`).join('') +
+    `<tr style="font-weight:700;background:#f5f7fb"><td>합계</td>
+     <td>${d.dept.reduce((a,r)=>a+r.total,0)}</td>
+     <td>${d.dept.reduce((a,r)=>a+r.regular,0)}</td>
+     <td>${d.dept.reduce((a,r)=>a+r.contract,0)}</td>
+     <td>${d.dept.reduce((a,r)=>a+r.exec,0)}</td>
+     <td colspan="2"></td>
+     <td>${d.dept.reduce((a,r)=>a+r.hire,0)}<span style="color:#9ba8b5;font-size:10px">(${d.dept.reduce((a,r)=>a+r.hireCum,0)})</span></td>
+     <td>${d.dept.reduce((a,r)=>a+r.exit,0)}<span style="color:#9ba8b5;font-size:10px">(${d.dept.reduce((a,r)=>a+r.exitCum,0)})</span></td>
+     <td><span class="badge blue">${d.kpi.attritionRate.toFixed(2)}%<span style="opacity:.7;font-size:10px">(${d.movement.rate.toFixed(2)}%)</span></span></td></tr>`;
+}
+
+/* ══════════════════════════════════════════════════════════
+   동적 데이터 (Excel 선택 시트 파싱 결과로 덮어씀)
+   시트가 없으면 아래 기본값 그대로 사용됩니다.
+══════════════════════════════════════════════════════════ */
+
+/* ── 장기 휴가/휴직자 ── */
+let LEAVE_D = {
+  labels:   ['26년 1월', '26년 2월', '26년 3월', '26년 4월', '26년 5월'],
+  출산휴가: [3, 3, 4, 3, 2],
+  질병휴가: [2, 1, 0, 1, 3],
+  육아휴직: [17, 14, 15, 16, 14],
+  질병휴직: [3, 2, 2, 2, 2],
+  명령휴직: [0, 0, 0, 0, 0],
+};
+let LEAVE_MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05'];
+const LEAVE_TOTALS_REF = { 출산휴가2024:3.8, 질병휴가2024:0.6, 육아휴직2024:17.5, 질병휴직2024:0.8,
+                            출산휴가2025:3.4, 질병휴가2025:1.2, 육아휴직2025:19.5, 질병휴직2025:1.0 };
+
+/* ── 근무지별 인원 (구조 정보는 static, 숫자만 동적 교체) ── */
+// col: Excel 컬럼 헤더명과 정확히 일치해야 함
+const LOC_STRUCTURE = [
+  { group:'본사',             gsub:'',                 loc:'씨티센터타워 (서울 중구)',      col:'씨티센터타워', rs:1 },
+  { group:'베네피아',         gsub:'(고객사관리)',      loc:'드림빌 (광주 서구)',            col:'드림빌',       rs:3 },
+  { group:'',                 gsub:'',                 loc:'비지니스센터 (대전 서구)',       col:'비지니스센터', rs:0 },
+  { group:'',                 gsub:'',                 loc:'한일오피스텔 (부산 남구)',       col:'한일오피스텔', rs:0 },
+  { group:'모빌리티',         gsub:'(스마트링크/티맵)', loc:'계원빌딩 (서울 종로구)',         col:'계원빌딩',     rs:3 },
+  { group:'',                 gsub:'',                 loc:'경기빌딩 (서울 중구)',           col:'경기빌딩',     rs:0 },
+  { group:'',                 gsub:'',                 loc:'원그로브빌딩 (서울 강서구)',     col:'원그로브빌딩', rs:0 },
+  { group:'스마트러닝',       gsub:'(mySUNI/SKA/SKH)', loc:'SK하이닉스 (경기도 이천)',       col:'SK하이닉스',   rs:2 },
+  { group:'',                 gsub:'',                 loc:'세미콜론수송 (서울 종로구)',      col:'세미콜론수송', rs:0 },
+  { group:'커머스개발',       gsub:'(SK스토아)',        loc:'KGIT센터 (서울 마포구)',         col:'KGIT센터',     rs:1 },
+  { group:'기타 (인력교류)',  gsub:'',                 loc:'삼구아이앤씨 (서울 중구)',       col:'삼구아이앤씨', rs:1 },
+];
+// 기본 숫자 데이터 (Excel 근무지 시트 없을 때 사용)
+let LOC_ROWS = LOC_STRUCTURE.map((s, i) => ({
+  ...s,
+  c: [[487,491,489,484,479],[1,1,1,1,1],[1,1,1,1,1],[2,2,2,2,2],
+      [3,3,3,3,3],[4,2,2,2,0],[0,0,0,0,5],[2,2,2,2,2],
+      [0,0,0,0,0],[9,9,9,9,9],[1,1,1,1,1]][i]
+}));
+let LOC_TOTAL  = [510,512,510,505,503];
+let LOC_MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05'];
+
+/* ── 퇴직연금 가입자 현황 (정적 데이터) ── */
+const PENSION_MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07'];
+const PENSION_LABELS = ['1월','2월','3월','4월','5월','6월','7월'];
+const PENSION_DATA = {
+  DB:    { cnt:[463,452,450,446,387,364,334], pct:[86.2,85.0,84.7,84.6,73.7,69.7,64.4] },
+  DC:    { cnt:[74,80,81,81,138,158,185],     pct:[13.8,15.0,15.3,15.4,26.3,30.3,35.6] },
+  total: { cnt:[537,532,531,527,525,522,519] }
+};
+
+/* ── 장애인고용현황 ── */
+let DIS_MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07'];
+let DIS_LABELS = ['1월','2월','3월','4월','5월','6월','7월'];
+// 전체 시뮬레이션 (일반직+CE 합산)
+let DIS_SIM = {
+  상시근로자:   [1140, 1153, 1123, 1093, 1095, 1095, 1072],
+  의무고용인원:  [35,   35,   34,   33,   33,   33,   33  ],
+  실고용인원:   [36,   38,   38,   38,   35,   35,   37  ],
+  고용률:       [3.158,3.296,3.384,3.477,3.196,3.196,3.455],
+  부담금액:     [0,    0,    0,    0,    0,    0,    0   ],
+};
+// 일반직
+let DIS_일반 = {
+  상시근로자:   [537,   536,   533,   527,   528,   528,   517  ],
+  의무고용인원:  [16.65, 16.62, 16.52, 16.34, 16.37, 16.37, 16.03],
+  실고용인원:   [18,    20,    20,    20,    21,    21,    19   ],
+};
+// CE (컨택센터)
+let DIS_CE = {
+  상시근로자:   [603,   617,   590,   566,   567,   567,   555  ],
+  의무고용인원:  [18.69, 19.13, 18.29, 17.55, 17.58, 17.58, 17.21],
+  실고용인원:   [18,    18,    18,    18,    14,    14,    18   ],
+};
+// 상시근로자 산정 상세 — 구조(cat/label/bold/highlight)는 고정, 숫자만 교체
+let DIS_CALC = {
+  rows: [
+    { cat:'근로소득인원', label:'급여지급',       일반:[557,555,550,549,547,547,538], CE:[674,664,645,632,609,609,615] },
+    { cat:'',             label:'퇴직정산',       일반:[4,  7,  2,  0,  2,  2,  0  ], CE:[0,  11, 0,  0,  0,  0,  0  ] },
+    { cat:'',             label:'일용직',         일반:[6,  4,  0,  0,  0,  0,  0  ], CE:[2,  0,  0,  0,  0,  0,  0  ] },
+    { cat:'',             label:'합계',           일반:[567,566,552,549,549,549,538], CE:[676,675,645,632,609,609,615], bold:true },
+    { cat:'제외인원',     label:'16일↓',          일반:[3,  1,  1,  3,  3,  3,  1  ], CE:[41, 14, 24, 33, 13, 13, 25 ] },
+    { cat:'',             label:'주말근무',       일반:[0,  0,  0,  0,  0,  0,  0  ], CE:[9,  9,  8,  7,  7,  7,  8  ] },
+    { cat:'',             label:'휴직/정직',      일반:[19, 16, 14, 17, 14, 14, 18 ], CE:[21, 22, 23, 26, 22, 22, 27 ] },
+    { cat:'',             label:'퇴직정산',       일반:[4,  9,  2,  0,  2,  2,  0  ], CE:[0,  13, 0,  0,  0,  0,  0  ] },
+    { cat:'',             label:'일용직',         일반:[2,  2,  0,  0,  0,  0,  0  ], CE:[2,  0,  0,  0,  0,  0,  0  ] },
+    { cat:'',             label:'기타(등기이사)', 일반:[2,  2,  2,  2,  2,  2,  2  ], CE:[0,  0,  0,  0,  0,  0,  0  ] },
+    { cat:'',             label:'합계',           일반:[30, 30, 19, 22, 21, 21, 21 ], CE:[73, 58, 55, 66, 42, 42, 60 ], bold:true },
+    { cat:'상시근로자',   label:'',               일반:[537,536,533,527,528,528,517], CE:[603,617,590,566,567,567,555], bold:true, highlight:true },
+  ]
+};
+
+/* ══════════════════════════════════════════════════════════
+   Excel 선택 시트 → 동적 데이터 업데이트 함수
+══════════════════════════════════════════════════════════ */
+function applyOptionalSheets(sheets) {
+  // ① 장기휴직
+  if (sheets.장기휴직) {
+    const sorted = [...sheets.장기휴직].sort((a,b) => a['연월'].localeCompare(b['연월']));
+    LEAVE_MONTHS = sorted.map(r => r['연월']);
+    LEAVE_D = {
+      labels:   sorted.map(r => { const [y,m]=r['연월'].split('-'); return `${String(y).slice(2)}년 ${parseInt(m)}월`; }),
+      출산휴가: sorted.map(r => Number(r['출산휴가'])||0),
+      질병휴가: sorted.map(r => Number(r['질병휴가'])||0),
+      육아휴직: sorted.map(r => Number(r['육아휴직'])||0),
+      질병휴직: sorted.map(r => Number(r['질병휴직'])||0),
+      명령휴직: sorted.map(r => Number(r['명령휴직'])||0),
+    };
+  }
+
+  // ② 근무지
+  if (sheets.근무지) {
+    const sorted = [...sheets.근무지].sort((a,b) => a['연월'].localeCompare(b['연월']));
+    LOC_MONTHS = sorted.map(r => r['연월']);
+    LOC_TOTAL  = sorted.map(r => Number(r['합계'])||0);
+    LOC_ROWS   = LOC_STRUCTURE.map(s => ({
+      ...s,
+      c: sorted.map(r => Number(r[s.col])||0)
+    }));
+  }
+
+  // ③ 장애인고용
+  if (sheets.장애인고용) {
+    const sorted = [...sheets.장애인고용].sort((a,b) => a['연월'].localeCompare(b['연월']));
+    DIS_MONTHS = sorted.map(r => r['연월']);
+    DIS_LABELS = sorted.map(r => { const m=r['연월'].split('-')[1]; return `${parseInt(m)}월`; });
+    DIS_SIM = {
+      상시근로자:   sorted.map(r => Number(r['합산_상시근로자'])||0),
+      의무고용인원:  sorted.map(r => Number(r['합산_의무고용인원'])||0),
+      실고용인원:   sorted.map(r => Number(r['합산_실고용인원'])||0),
+      고용률:       sorted.map(r => Number(r['합산_고용률'])||0),
+      부담금액:     sorted.map(r => Number(r['합산_부담금액'])||0),
+    };
+    DIS_일반 = {
+      상시근로자:   sorted.map(r => Number(r['일반_상시근로자'])||0),
+      의무고용인원:  sorted.map(r => Number(r['일반_의무고용인원'])||0),
+      실고용인원:   sorted.map(r => Number(r['일반_실고용인원'])||0),
+    };
+    DIS_CE = {
+      상시근로자:   sorted.map(r => Number(r['CE_상시근로자'])||0),
+      의무고용인원:  sorted.map(r => Number(r['CE_의무고용인원'])||0),
+      실고용인원:   sorted.map(r => Number(r['CE_실고용인원'])||0),
+    };
+  }
+
+  // ④ 장애인산정
+  if (sheets.장애인산정) {
+    const allMonths = [...new Set(sheets.장애인산정.map(r=>r['연월']))].sort();
+    // 각 순번(1~12)별로 월 배열 생성
+    const getArr = (seq) => allMonths.map(mo => {
+      const row = sheets.장애인산정.find(r => r['연월']===mo && Number(r['순번'])===seq);
+      return row ? { 일반: Number(row['일반직'])||0, CE: Number(row['CE'])||0 } : { 일반:0, CE:0 };
+    });
+    const STRUCT = DIS_CALC.rows.map(r => ({ cat:r.cat, label:r.label, bold:r.bold, highlight:r.highlight }));
+    DIS_CALC = {
+      rows: STRUCT.map((s, i) => ({
+        ...s,
+        일반: getArr(i+1).map(v=>v.일반),
+        CE:   getArr(i+1).map(v=>v.CE),
+      }))
+    };
+  }
+}
+
+/* ── chart helpers ── */
+function mk(id, type, data, opts = {}) {
+  const ctx = $(id); if (!ctx) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(ctx, { type, data,
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ boxWidth:12 } } }, ...opts } });
+}
+function upd(id, dsData) {
+  const c = charts[id]; if (!c) return;
+  dsData.forEach((d, i) => { if (c.data.datasets[i]) c.data.datasets[i].data = d; });
+  c.update('none');
+}
+function updFull(id, labels, dsData) {
+  const c = charts[id]; if (!c) return;
+  c.data.labels = labels;
+  dsData.forEach((d, i) => { if (c.data.datasets[i]) c.data.datasets[i].data = d; });
+  c.update('none');
+}
+
+function initCharts(d) {
+  mk('trendChart','bar',{ labels:d.yearlyTrend.years,
+    datasets:[
+      { label:'정규직', data:d.yearlyTrend.regular,  backgroundColor:'#2e86de', borderRadius:4 },
+      { label:'계약직', data:d.yearlyTrend.contract, backgroundColor:'#e67e22', borderRadius:4 },
+      { label:'임원',   data:d.yearlyTrend.exec,     backgroundColor:'#8e44ad', borderRadius:4 }
+    ]
+  },{ _showStackTotal:true, plugins:{legend:{position:'top'}},
+      scales:{x:{stacked:true},y:{stacked:true,beginAtZero:false,min:480}} });
+
+  mk('empTypeChart','doughnut',{ labels:['정규직','계약직','임원'],
+    datasets:[{ data:d.empType, backgroundColor:['#2e86de','#e67e22','#8e44ad'], borderWidth:0, cutout:'70%' }]
+  },{ plugins:{legend:{position:'bottom'}} });
+
+  mk('jobTechChart','bar',{ labels:d.jobGroup.tech.labels,
+    datasets:[{ data:d.jobGroup.tech.values, backgroundColor:TECH_COLORS, borderRadius:6 }]
+  },{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} });
+
+  mk('jobGenChart','bar',{ labels:['일반 직군'],
+    datasets:[{ data:[d.jobGroup.general.values[0]||0], backgroundColor:['#e67e22'], borderRadius:6 }]
+  },{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} });
+
+  mk('gradeRLChart','bar',{ labels:GRADE_LABELS,
+    datasets:[{ label:'인원', data:d.grade.total,
+      backgroundColor:GRADE_COLORS, borderRadius:6 }]
+  },{ layout:{padding:{top:28}}, plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true, grace:'12%', grid:{color:'rgba(0,0,0,.05)'}}} });
+
+  mk('ageChart','bar',{ labels:['20대','30대','40대','50대+'],
+    datasets:[
+      { label:'남성', data:d.ageByGender.male,   backgroundColor:'#2e86de', borderRadius:0 },
+      { label:'여성', data:d.ageByGender.female, backgroundColor:'#e91e8c', borderRadius:4 }
+    ]
+  },{ _showStackTotal:true,
+      layout:{padding:{top:22}},
+      plugins:{legend:{position:'top', labels:{boxWidth:10, padding:8, font:{size:11}}}},
+      scales:{x:{stacked:true, grid:{display:false}},
+              y:{stacked:true, beginAtZero:true, grace:'8%', grid:{color:'rgba(0,0,0,.05)'}}} });
+
+  mk('genderChart','doughnut',{ labels:['남성','여성'],
+    datasets:[{ data:d.gender, backgroundColor:['#2e86de','#e91e8c'], borderWidth:0, cutout:'65%' }]
+  },{ plugins:{legend:{position:'bottom'}} });
+
+  mk('tenureChart','bar',{ labels:TENURE_LABELS,
+    datasets:[{ data:d.tenure, backgroundColor:['#1a3a5c','#2e4a7c','#2e86de','#3498db','#5dade2','#aed6f1','#d6eaf8'], borderRadius:6 }]
+  },{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} });
+
+  mk('eduChart','pie',{ labels:EDU_LABELS,
+    datasets:[{ data:d.edu, backgroundColor:['#1a3a5c','#2e86de','#5dade2','#bdc3c7'], borderWidth:0 }]
+  },{ plugins:{legend:{position:'bottom'}} });
+
+  // ── 퇴직연금 차트 (초기: 전체 데이터로 생성, renderData 에서 월별 슬라이스 업데이트) ──
+  mk('pensionChart','bar',{
+    labels: PENSION_LABELS,
+    datasets:[
+      { label:'DB(확정급여형)', data:PENSION_DATA.DB.cnt,
+        backgroundColor:'rgba(46,134,222,0.75)', borderRadius:4, stack:'p' },
+      { label:'DC(확정기여형)', data:PENSION_DATA.DC.cnt,
+        backgroundColor:'rgba(39,174,96,0.75)',  borderRadius:4, stack:'p' }
+    ]
+  },{
+    plugins:{
+      legend:{position:'bottom'},
+      tooltip:{ callbacks:{
+        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()}명`
+      }}
+    },
+    scales:{
+      x:{ stacked:true },
+      y:{ stacked:true, beginAtZero:true, grace:'8%',
+          ticks:{ callback: v => v+'명' },
+          grid:{color:'rgba(0,0,0,.05)'} }
+    }
+  });
+
+  // ── 장애인고용현황 추이 차트 ──
+  (function(){
+    const ctx = $('disChart'); if(!ctx) return;
+    if(charts['disChart']) charts['disChart'].destroy();
+    // 3.1% 기준선 플러그인
+    const targetLinePlugin = {
+      id:'disTargetLine',
+      afterDraw(chart){
+        const {ctx:c, scales:{y2}} = chart;
+        if(!y2) return;
+        const yPx = y2.getPixelForValue(3.1);
+        c.save();
+        c.setLineDash([5,4]);
+        c.strokeStyle = '#e74c3c';
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.moveTo(chart.chartArea.left, yPx);
+        c.lineTo(chart.chartArea.right, yPx);
+        c.stroke();
+        c.fillStyle = '#e74c3c';
+        c.font = '10px sans-serif';
+        c.fillText('의무 3.1%', chart.chartArea.right - 52, yPx - 4);
+        c.restore();
+      }
+    };
+    charts['disChart'] = new Chart(ctx, {
+      type:'bar',
+      data:{
+        labels: DIS_LABELS,
+        datasets:[
+          { label:'의무고용인원', data:DIS_SIM.의무고용인원, backgroundColor:'rgba(230,126,34,0.5)', borderColor:'#e67e22', borderWidth:1.5, borderRadius:4, yAxisID:'y' },
+          { label:'실고용인원',   data:DIS_SIM.실고용인원,   backgroundColor:'rgba(39,174,96,0.7)',  borderColor:'#27ae60', borderWidth:1.5, borderRadius:4, yAxisID:'y' },
+          { type:'line', label:'고용률(%)', data:DIS_SIM.고용률, borderColor:'#2e86de', backgroundColor:'rgba(46,134,222,.12)', fill:false, tension:.3, pointRadius:5, pointHoverRadius:7, yAxisID:'y2' },
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        scales:{
+          y:  { beginAtZero:false, min:28, title:{display:true,text:'인원 (명)'}, position:'left'  },
+          y2: { beginAtZero:false, min:2.8, max:4.0, title:{display:true,text:'고용률 (%)'}, position:'right', grid:{drawOnChartArea:false},
+                ticks:{ callback: v => v.toFixed(1)+'%' } },
+        },
+        plugins:{ legend:{position:'bottom'}, tooltip:{ callbacks:{
+          label: ctx => ctx.dataset.yAxisID==='y2' ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}%` : `${ctx.dataset.label}: ${ctx.parsed.y}명`
+        }}}
+      },
+      plugins:[targetLinePlugin]
+    });
+  })();
+
+  // ── 장기 휴가/휴직자 차트 (총인원 상단 표기 플러그인 포함) ──
+  (function(){
+    const ctx = $('leaveChart'); if(!ctx) return;
+    if(charts['leaveChart']) charts['leaveChart'].destroy();
+    const leaveTotalPlugin = {
+      id:'leaveTotalLabels',
+      afterDatasetsDraw(chart){
+        const {ctx:c, data} = chart;
+        const lastDsIdx = data.datasets.length - 1;
+        const meta = chart.getDatasetMeta(lastDsIdx);
+        c.save();
+        c.font = 'bold 11px sans-serif';
+        c.fillStyle = '#1a3a5c';
+        c.textAlign = 'center';
+        data.labels.forEach((_, i) => {
+          const total = data.datasets.reduce((s, ds) => s + (ds.data[i]||0), 0);
+          const bar = meta.data[i];
+          if(bar) c.fillText(total + '명', bar.x, bar.y - 6);
+        });
+        c.restore();
+      }
+    };
+    charts['leaveChart'] = new Chart(ctx, {
+      type:'bar',
+      data:{
+        labels: LEAVE_D.labels,
+        datasets:[
+          { label:'출산휴가', data:LEAVE_D.출산휴가, backgroundColor:'#e91e8c', borderRadius:0 },
+          { label:'질병휴가', data:LEAVE_D.질병휴가, backgroundColor:'#e67e22', borderRadius:0 },
+          { label:'육아휴직', data:LEAVE_D.육아휴직, backgroundColor:'#2e86de', borderRadius:0 },
+          { label:'질병휴직', data:LEAVE_D.질병휴직, backgroundColor:'#85c1e9', borderRadius:0 },
+          { label:'명령휴직', data:LEAVE_D.명령휴직, backgroundColor:'#8e44ad', borderRadius:4 },
+        ]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        layout:{ padding:{ top:18 } },
+        scales:{
+          x:{ stacked:true, grid:{display:false} },
+          y:{ stacked:true, beginAtZero:true, grace:'8%', title:{display:true,text:'인원 (명)'} }
+        },
+        plugins:{ legend:{position:'bottom', labels:{boxWidth:10, padding:8, font:{size:11}}} }
+      },
+      plugins:[leaveTotalPlugin]
+    });
+  })();
+  // ── 장기 휴직자 요약 패널은 loadData()에서 기준월에 따라 업데이트 ──
+
+  mk('movChart','line',{ labels:d.monthlyMov.labels,
+    datasets:[
+      { label:'입사', data:d.monthlyMov.hire, borderColor:'#2e86de', backgroundColor:'rgba(46,134,222,.12)', fill:true, tension:.4, pointRadius:5 },
+      { label:'퇴사', data:d.monthlyMov.exit, borderColor:'#e74c3c', backgroundColor:'rgba(231,76,60,.08)',   fill:true, tension:.4, pointRadius:5 }
+    ]
+  },{ plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}} });
+
+  mk('attrReasonChart','doughnut',{
+    labels:['이직','건강','육아','휴식','개인사유','기타','계약만료','권고사직','정년퇴직'],
+    datasets:[{ data:d.attrReason,
+      backgroundColor:['#e74c3c','#e67e22','#f39c12','#f1c40f','#27ae60','#95a5a6','#5dade2','#2e86de','#1a3a5c'],
+      borderWidth:0, cutout:'55%' }]
+  },{ plugins:{legend:{position:'bottom', labels:{boxWidth:11,font:{size:11}}}} });
+
+  mk('attrGradeChart','bar',{
+    labels:['계약직','D','P1','P2','S','팀장/PL','임원'],
+    datasets:[{ data:d.attrGrade, backgroundColor:'#e74c3c', borderRadius:6 }]
+  },{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,ticks:{stepSize:1}}} });
+
+  const dn = d.dept.map(r => r.name);
+  // deptBarChart 및 deptGenderChart는 renderData() 내 IIFE에서 처리
+}
+
+/* ══════════════════════════════════════════════════════════
+   탭 전환
+══════════════════════════════════════════════════════════ */
+function showPage(id, e) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  $('page-' + id).classList.add('active');
+  if (e?.target) e.target.classList.add('active');
+}
+
+/* ══════════════════════════════════════════════════════════
+   파일 처리 & 렌더링
+══════════════════════════════════════════════════════════ */
+function setOverlay(msg) {
+  if (msg) { $('overlay-msg').textContent = msg; $('overlay').classList.remove('hidden'); }
+  else      { $('overlay').classList.add('hidden'); }
+}
+
+function showFileErr(msg) {
+  const el = $('file-err');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  if (!/\.(xlsx|xls)$/i.test(file.name)) {
+    showFileErr('엑셀 파일(.xlsx 또는 .xls)만 지원합니다.');
+    return;
+  }
+  $('file-err').style.display = 'none';
+  setOverlay('엑셀 파일 읽는 중...');
+
+  try {
+    const sheets = await readExcel(file);
+    // 선택 시트가 있으면 동적 데이터 먼저 업데이트 (initCharts가 최신값을 사용하도록)
+    applyOptionalSheets(sheets);
+    const { data, months } = buildData(sheets);
+    _DATA = data;
+
+    // 월 선택기 갱신
+    const sel = $('monthSelect');
+    sel.innerHTML = '';
+    months.forEach(m => {
+      const [y, mo] = m.split('-');
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = `${y}년 ${parseInt(mo)}월`;
+      sel.appendChild(opt);
+    });
+
+    const latest = months[0];
+    initCharts(_DATA[latest]);
+    loadData(latest);
+
+    // 파일명 표시 & 화면 전환
+    $('file-name-label').textContent = file.name;
+    $('file-screen').classList.add('hidden');
+    setOverlay(null);
+  } catch (err) {
+    setOverlay(null);
+    showFileErr(err.message);
+    console.error(err);
+  }
+}
+
+/* ── 시작: 이벤트 바인딩 ── */
+// 초기 파일 선택 input
+$('xlsxInput').addEventListener('change', e => handleFile(e.target.files[0]));
+// 헤더 파일 변경 input
+$('xlsxInput2').addEventListener('change', e => handleFile(e.target.files[0]));
+
+// 드래그 & 드롭 (전체 화면)
+const dropZone = $('drop-zone');
+document.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) dropZone.classList.remove('drag-over'); });
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+</script>
+<style>
+/* ── 조직도 ── */
+#org-chart { position:relative; min-width:1280px; font-family:inherit; user-select:none; }
+.oc-row1 { display:flex; justify-content:center; }
+.oc-ceo {
+  background:#1a2d4d; color:#fff; border-radius:10px;
+  padding:10px 48px; text-align:center; position:relative; z-index:2;
+  box-shadow:0 3px 10px rgba(0,0,0,.18);
+}
+.oc-ceo-title { font-size:15px; font-weight:700; }
+.oc-ceo-count { font-size:12px; font-weight:400; margin-top:2px; opacity:.8; }
+/* gap for SVG connector – the SVG is absolutely positioned over #org-chart */
+.oc-gap { height:38px; }
+.oc-bunbu-row { display:flex; gap:10px; align-items:flex-start; }
+.oc-bunbu-col { flex:1; min-width:190px; display:flex; flex-direction:column; }
+.oc-growth-col { min-width:130px; max-width:145px; flex:none; display:flex; flex-direction:column; }
+/* 본부 header box */
+.oc-bunbu-hdr {
+  border-radius:8px; padding:10px 10px 8px; text-align:center;
+  position:relative; z-index:2; box-shadow:0 2px 8px rgba(0,0,0,.12);
+}
+.oc-bunbu-hdr-name { font-size:12px; font-weight:700; color:#fff; line-height:1.35; }
+.oc-bunbu-hdr-head { font-size:10px; color:rgba(255,255,255,.85); margin-top:2px; }
+.oc-bunbu-hdr-cnt {
+  display:inline-block; background:rgba(255,255,255,.25); color:#fff;
+  border-radius:10px; font-size:12px; font-weight:700; padding:1px 10px; margin-top:5px;
+}
+/* team card */
+.oc-team-wrap { margin-top:8px; display:flex; flex-direction:column; gap:5px; }
+.oc-team-card {
+  background:#fff; border:1px solid #e0e6f0; border-radius:6px;
+  padding:7px 10px 6px; position:relative; box-shadow:0 1px 3px rgba(0,0,0,.06);
+}
+.oc-tc-name { font-size:11px; font-weight:700; color:#1a2d4d; padding-right:34px; line-height:1.4; }
+.oc-tc-head { font-size:10px; color:#6b7a8d; margin-top:1px; }
+.oc-tc-cnt {
+  position:absolute; top:7px; right:7px;
+  font-size:10px; font-weight:700; color:#fff;
+  border-radius:8px; padding:1px 6px;
+}
+.oc-tc-note { font-size:9px; color:#e07b39; font-weight:500; margin-left:4px; }
+/* PL sub-org */
+.oc-pl-sub { padding-left:10px; margin-top:3px; display:flex; flex-direction:column; gap:3px; }
+.oc-pl-row { display:flex; align-items:flex-start; gap:0; }
+.oc-pl-line {
+  display:flex; flex-direction:column; align-items:center;
+  margin-top:6px; margin-right:5px; flex-shrink:0;
+}
+.oc-pl-line-v { width:1px; height:6px; background:#c0ccda; }
+.oc-pl-line-h { width:7px; height:1px; background:#c0ccda; }
+.oc-pl-card {
+  flex:1; background:#f5f8fc; border:1px solid #dde5f0;
+  border-radius:5px; padding:5px 8px 4px; position:relative;
+}
+.oc-pl-name { font-size:10px; font-weight:600; color:#3a5070; padding-right:30px; }
+.oc-pl-cnt {
+  position:absolute; top:5px; right:6px;
+  font-size:10px; font-weight:700;
+  border-radius:7px; padding:0 5px; border:1px solid;
+}
+/* 성장전략팀 card */
+.oc-growth-card {
+  background:#fff; border:2px solid #1a2d4d; border-radius:8px;
+  padding:10px 10px 8px; text-align:center;
+  position:relative; z-index:2; box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.oc-growth-name { font-size:12px; font-weight:700; color:#1a2d4d; line-height:1.35; }
+.oc-growth-head { font-size:10px; color:#6b7a8d; margin-top:2px; }
+.oc-growth-cnt {
+  display:inline-block; background:#1a2d4d; color:#fff;
+  border-radius:10px; font-size:12px; font-weight:700; padding:1px 10px; margin-top:5px;
+}
+/* 본부 직속 PL (팀 없이 본부 바로 아래) */
+.oc-bunbu-pl-card {
+  background:#fff8f0; border:1px solid #f0dcc8; border-radius:6px;
+  padding:7px 10px 6px; position:relative; box-shadow:0 1px 3px rgba(0,0,0,.05);
+  margin-bottom:0;
+}
+.oc-bunbu-pl-card .oc-tc-note { font-size:9px; color:#e07b39; font-weight:500; margin-left:4px; }
+</style>
+
+<script>
+/* ══ 조직도: 월별 실제 인원 (Rowdata 엑셀 기반) ══
+   key = 조직(상위조직포함) 컬럼 값
+*/
+const ORG_D = {
+  '2026-01':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':26,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':9,'베네피아본부/Data기획팀':10,
+    '베네피아본부/서비스/UX팀':17,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':17,'베네피아본부/개발팀/개발팀(장연희PL)':23,
+    'Enterprise사업본부/HR사업개발팀':12,'Enterprise사업본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    'Enterprise사업본부/교육서비스팀':21,'Enterprise사업본부/교육서비스팀/교육서비스팀(정미란PL)':16,
+    'Enterprise사업본부/Mobility사업팀':2,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    'Enterprise사업본부/관제플랫폼사업팀':10,
+    'Enterprise사업본부/Enterprise사업팀':22,'Enterprise사업본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    'Enterprise사업본부/Infra운영팀':19,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':4,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':5,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':16,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':18,'제휴마케팅2본부/멤버십제휴팀':24,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '경영기획본부/HR/SHE팀':16,'경영기획본부/경영기획팀':7,'경영기획본부/재무회계팀':16,
+    '경영기획본부/컴플라이언스팀':17,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '성장전략팀':6
+  },
+  '2026-02':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':24,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':9,'베네피아본부/Data기획팀':10,
+    '베네피아본부/서비스/UX팀':17,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':17,'베네피아본부/개발팀/개발팀(장연희PL)':22,
+    'Enterprise사업본부/HR사업개발팀':12,'Enterprise사업본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    'Enterprise사업본부/교육서비스팀':21,'Enterprise사업본부/교육서비스팀/교육서비스팀(정미란PL)':16,
+    'Enterprise사업본부/Mobility사업팀':2,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    'Enterprise사업본부/관제플랫폼사업팀':10,
+    'Enterprise사업본부/Enterprise사업팀':22,'Enterprise사업본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    'Enterprise사업본부/Infra운영팀':19,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':5,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':6,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':16,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':18,'제휴마케팅2본부/멤버십제휴팀':24,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '경영기획본부/HR/SHE팀':15,'경영기획본부/경영기획팀':7,'경영기획본부/재무회계팀':15,
+    '경영기획본부/컴플라이언스팀':17,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '성장전략팀':6
+  },
+  '2026-03':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':26,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':9,'베네피아본부/Data기획팀':10,
+    '베네피아본부/서비스/UX팀':16,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':17,'베네피아본부/개발팀/개발팀(장연희PL)':22,
+    'Enterprise사업본부/HR사업개발팀':12,'Enterprise사업본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    'Enterprise사업본부/교육서비스팀':20,'Enterprise사업본부/교육서비스팀/교육서비스팀(정미란PL)':16,
+    'Enterprise사업본부/Mobility사업팀':2,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    'Enterprise사업본부/관제플랫폼사업팀':10,
+    'Enterprise사업본부/Enterprise사업팀':22,'Enterprise사업본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    'Enterprise사업본부/Infra운영팀':19,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':6,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':6,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':16,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':18,'제휴마케팅2본부/멤버십제휴팀':23,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '경영기획본부/HR/SHE팀':14,'경영기획본부/경영기획팀':7,'경영기획본부/재무회계팀':15,
+    '경영기획본부/컴플라이언스팀':17,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '성장전략팀':6
+  },
+  '2026-04':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':26,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':9,'베네피아본부/Data기획팀':9,
+    '베네피아본부/서비스/UX팀':15,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':16,'베네피아본부/개발팀/개발팀(장연희PL)':21,
+    'Enterprise사업본부/HR사업개발팀':12,'Enterprise사업본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    'Enterprise사업본부/교육서비스팀':20,'Enterprise사업본부/교육서비스팀/교육서비스팀(정미란PL)':16,
+    'Enterprise사업본부/Mobility사업팀':2,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    'Enterprise사업본부/관제플랫폼사업팀':10,
+    'Enterprise사업본부/Enterprise사업팀':22,'Enterprise사업본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    'Enterprise사업본부/Infra운영팀':19,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':6,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':6,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':15,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':18,'제휴마케팅2본부/멤버십제휴팀':24,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '경영기획본부/HR/SHE팀':14,'경영기획본부/경영기획팀':7,'경영기획본부/재무회계팀':15,
+    '경영기획본부/컴플라이언스팀':17,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '성장전략팀':6
+  },
+  '2026-05':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':26,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':8,'베네피아본부/Data기획팀':9,
+    '베네피아본부/서비스/UX팀':15,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':16,'베네피아본부/개발팀/개발팀(장연희PL)':21,
+    'Enterprise사업본부/HR사업개발팀':12,'Enterprise사업본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    'Enterprise사업본부/교육서비스팀':19,'Enterprise사업본부/교육서비스팀/교육서비스팀(정미란PL)':16,
+    'Enterprise사업본부/Mobility사업팀':2,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'Enterprise사업본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    'Enterprise사업본부/관제플랫폼사업팀':10,
+    'Enterprise사업본부/Enterprise사업팀':22,'Enterprise사업본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    'Enterprise사업본부/Infra운영팀':18,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':6,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':6,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':15,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':18,'제휴마케팅2본부/멤버십제휴팀':24,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '경영기획본부/HR/SHE팀':14,'경영기획본부/경영기획팀':7,'경영기획본부/재무회계팀':15,
+    '경영기획본부/컴플라이언스팀':17,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '성장전략팀':6
+  },
+  '2026-06':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':26,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':9,'베네피아본부/Data기획팀':9,
+    '베네피아본부/서비스/UX팀':15,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':16,'베네피아본부/개발팀/개발팀(장연희PL)':21,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':6,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':6,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':15,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅1본부/Mobility사업팀':2,'제휴마케팅1본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'제휴마케팅1본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    '제휴마케팅1본부/관제플랫폼사업팀':10,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':17,'제휴마케팅2본부/멤버십제휴팀':24,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '제휴마케팅2본부/Enterprise사업팀':23,'제휴마케팅2본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    '제휴마케팅2본부/HR사업개발팀':12,'제휴마케팅2본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    '제휴마케팅2본부/교육서비스팀':18,'제휴마케팅2본부/교육서비스팀/교육서비스팀(정미란PL)':15,
+    '경영기획본부/HR/SHE팀':14,'경영기획본부/재무회계팀':15,
+    '경영기획본부/컴플라이언스팀':18,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '경영기획본부/Infra운영팀':16,'경영기획본부/경영혁신팀':6,'경영기획본부/성과관리팀':7
+  },
+  '2026-07':{
+    '베네피아본부/복지컨설팅팀':16,'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)':16,
+    '베네피아본부/커머스사업팀':6,'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)':26,'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)':9,
+    '베네피아본부/여행사업팀':9,'베네피아본부/Data기획팀':9,
+    '베네피아본부/서비스/UX팀':15,'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)':16,
+    '베네피아본부/개발팀':15,'베네피아본부/개발팀/개발팀(장연희PL)':20,
+    '제휴마케팅1본부/제휴마케팅1본부(김선규PL)':6,
+    '제휴마케팅1본부/TMS사업팀':7,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)':5,'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)':6,
+    '제휴마케팅1본부/TM인프라/개발팀':7,'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)':8,
+    '제휴마케팅1본부/Payment사업팀':9,'제휴마케팅1본부/특판/MRO사업팀':15,'제휴마케팅1본부/CC사업팀':9,
+    '제휴마케팅1본부/Mobility사업팀':2,'제휴마케팅1본부/Mobility사업팀/Mobility사업팀(김홍석PL)':16,'제휴마케팅1본부/Mobility사업팀/Mobility사업팀(황민하PL)':12,
+    '제휴마케팅1본부/관제플랫폼사업팀':10,
+    '제휴마케팅2본부/쿠폰사업팀':12,'제휴마케팅2본부/구독서비스팀':17,'제휴마케팅2본부/멤버십제휴팀':24,
+    '제휴마케팅2본부/상품개발팀':5,'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)':16,
+    '제휴마케팅2본부/Enterprise사업팀':23,'제휴마케팅2본부/Enterprise사업팀/Enterprise사업팀(김선호PL)':9,
+    '제휴마케팅2본부/HR사업개발팀':12,'제휴마케팅2본부/HR사업개발팀/HR사업개발팀(박준현PL)':12,
+    '제휴마케팅2본부/교육서비스팀':18,'제휴마케팅2본부/교육서비스팀/교육서비스팀(정미란PL)':15,
+    '경영기획본부/HR/SHE팀':14,'경영기획본부/재무회계팀':15,
+    '경영기획본부/컴플라이언스팀':18,'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)':5,
+    '경영기획본부/Infra운영팀':16,'경영기획본부/경영혁신팀':6,'경영기획본부/성과관리팀':7
+  }
+};
+
+/* ══ 조직 구조 (정적) ══ */
+const ORG_STRUCT = [
+  { bunbu:'베네피아본부', head:'유지연', color:'#2563a8',
+    bunbuTotals:{'2026-01':166,'2026-02':163,'2026-03':164,'2026-04':160,'2026-05':159,'2026-06':160,'2026-07':158},
+    bunbuPLs: [],
+    teams:[
+      { name:'복지컨설팅팀', head:'김광일', key:'베네피아본부/복지컨설팅팀',
+        pls:[{name:'함종훈', key:'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)'}] },
+      { name:'커머스사업팀', head:'문경수', key:'베네피아본부/커머스사업팀',
+        pls:[
+          {name:'정금아', key:'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)'},
+          {name:'김재형', key:'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)'}
+        ] },
+      { name:'여행사업팀', head:'조원준', key:'베네피아본부/여행사업팀', pls:[] },
+      { name:'Data기획팀', head:'맹정연', key:'베네피아본부/Data기획팀', pls:[] },
+      { name:'서비스/UX팀', head:'고준길', key:'베네피아본부/서비스/UX팀',
+        pls:[{name:'김성은', key:'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)'}] },
+      { name:'개발팀', head:'윤선연', key:'베네피아본부/개발팀',
+        pls:[{name:'장연희', key:'베네피아본부/개발팀/개발팀(장연희PL)'}] }
+    ]
+  },
+  { bunbu:'Enterprise사업본부', head:'임동찬', color:'#1e7e5e',
+    bunbuTotals:{'2026-01':152,'2026-02':152,'2026-03':152,'2026-04':152,'2026-05':150},
+    bunbuPLs: [],
+    teams:[
+      { name:'HR사업개발팀', head:'하주석', key:'Enterprise사업본부/HR사업개발팀',
+        pls:[{name:'박준현', key:'Enterprise사업본부/HR사업개발팀/HR사업개발팀(박준현PL)'}] },
+      { name:'교육서비스팀', head:'김수진', key:'Enterprise사업본부/교육서비스팀',
+        pls:[{name:'정미란', key:'Enterprise사업본부/교육서비스팀/교육서비스팀(정미란PL)'}] },
+      { name:'Mobility사업팀', head:'김준모', key:'Enterprise사업본부/Mobility사업팀',
+        pls:[
+          {name:'김홍석', key:'Enterprise사업본부/Mobility사업팀/Mobility사업팀(김홍석PL)'},
+          {name:'황민하', key:'Enterprise사업본부/Mobility사업팀/Mobility사업팀(황민하PL)'}
+        ] },
+      { name:'관제플랫폼사업팀', head:'유연희', key:'Enterprise사업본부/관제플랫폼사업팀', pls:[] },
+      { name:'Enterprise사업팀', head:'신기종', key:'Enterprise사업본부/Enterprise사업팀',
+        pls:[{name:'김선호', key:'Enterprise사업본부/Enterprise사업팀/Enterprise사업팀(김선호PL)'}] },
+      { name:'Infra운영팀', head:'양대석', key:'Enterprise사업본부/Infra운영팀', pls:[] }
+    ]
+  },
+  { bunbu:'제휴마케팅1본부', head:'이승수', color:'#7b4fa6',
+    bunbuTotals:{'2026-01':71,'2026-02':73,'2026-03':74,'2026-04':73,'2026-05':73,'2026-06':113,'2026-07':113},
+    bunbuPLs:[
+      {name:'김선규', note:'*안전솔루션', key:'제휴마케팅1본부/제휴마케팅1본부(김선규PL)'}
+    ],
+    teams:[
+      { name:'TMS사업팀', head:'조현재', key:'제휴마케팅1본부/TMS사업팀', note:'*TMS',
+        pls:[
+          {name:'김창호', key:'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)'},
+          {name:'김동근', key:'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)'}
+        ] },
+      { name:'TM인프라/개발팀', head:'김국현', key:'제휴마케팅1본부/TM인프라/개발팀',
+        pls:[{name:'김명기', key:'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)'}] },
+      { name:'Payment사업팀', head:'이정한', key:'제휴마케팅1본부/Payment사업팀', pls:[] },
+      { name:'특판/MRO사업팀', head:'장주만', key:'제휴마케팅1본부/특판/MRO사업팀', pls:[] },
+      { name:'CC사업팀', head:'김은영', key:'제휴마케팅1본부/CC사업팀', pls:[] }
+    ]
+  },
+  { bunbu:'제휴마케팅2본부', head:'박현순', color:'#d4501a',
+    bunbuTotals:{'2026-01':76,'2026-02':76,'2026-03':75,'2026-04':76,'2026-05':76,'2026-06':164,'2026-07':164},
+    bunbuPLs:[],
+    teams:[
+      { name:'쿠폰사업팀',   head:'전용승', key:'제휴마케팅2본부/쿠폰사업팀', pls:[] },
+      { name:'구독서비스팀', head:'박성현', key:'제휴마케팅2본부/구독서비스팀', pls:[] },
+      { name:'멤버십제휴팀', head:'박은철', key:'제휴마케팅2본부/멤버십제휴팀', pls:[] },
+      { name:'상품개발팀', head:'이상경', key:'제휴마케팅2본부/상품개발팀',
+        pls:[{name:'오세원', key:'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)'}] }
+    ]
+  },
+  { bunbu:'경영기획본부', head:'최훈용', color:'#3a6e8a',
+    bunbuTotals:{'2026-01':62,'2026-02':60,'2026-03':59,'2026-04':59,'2026-05':59,'2026-06':82,'2026-07':82},
+    bunbuPLs:[],
+    teams:[
+      { name:'HR/SHE팀',      head:'김용',   key:'경영기획본부/HR/SHE팀', note:'*SHE', pls:[] },
+      { name:'경영기획팀',    head:'양우창', key:'경영기획본부/경영기획팀', pls:[] },
+      { name:'재무회계팀',    head:'조민수', key:'경영기획본부/재무회계팀', pls:[] },
+      { name:'컴플라이언스팀',head:'윤석우', key:'경영기획본부/컴플라이언스팀',
+        pls:[{name:'이창재', key:'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)'}] }
+    ]
+  }
+];
+
+/* ══ 조직 구조 V2: 2026-06 이후 (Enterprise사업본부 해체) ══ */
+const ORG_STRUCT_V2 = [
+  { bunbu:'베네피아본부', head:'유지연', color:'#2563a8',
+    bunbuTotals:{'2026-06':160,'2026-07':158},
+    bunbuPLs: [],
+    teams:[
+      { name:'복지컨설팅팀', head:'김광일', key:'베네피아본부/복지컨설팅팀',
+        pls:[{name:'함종훈', key:'베네피아본부/복지컨설팅팀/복지컨설팅팀(함종훈PL)'}] },
+      { name:'커머스사업팀', head:'문경수', key:'베네피아본부/커머스사업팀',
+        pls:[
+          {name:'정금아', key:'베네피아본부/커머스사업팀/커머스사업팀(정금아PL)'},
+          {name:'김재형', key:'베네피아본부/커머스사업팀/커머스사업팀(김재형PL)'}
+        ] },
+      { name:'여행사업팀', head:'조원준', key:'베네피아본부/여행사업팀', pls:[] },
+      { name:'Data기획팀', head:'맹정연', key:'베네피아본부/Data기획팀', pls:[] },
+      { name:'서비스/UX팀', head:'고준길', key:'베네피아본부/서비스/UX팀',
+        pls:[{name:'김성은', key:'베네피아본부/서비스/UX팀/서비스/UX팀(김성은PL)'}] },
+      { name:'개발팀', head:'윤선연', key:'베네피아본부/개발팀',
+        pls:[{name:'장연희', key:'베네피아본부/개발팀/개발팀(장연희PL)'}] }
+    ]
+  },
+  { bunbu:'제휴마케팅1본부', head:'이승수', color:'#7b4fa6',
+    bunbuTotals:{'2026-06':113,'2026-07':113},
+    bunbuPLs:[
+      {name:'김선규', note:'*안전솔루션', key:'제휴마케팅1본부/제휴마케팅1본부(김선규PL)'}
+    ],
+    teams:[
+      { name:'TMS사업팀', head:'조현재', key:'제휴마케팅1본부/TMS사업팀', note:'*TMS',
+        pls:[
+          {name:'김창호', key:'제휴마케팅1본부/TMS사업팀/TMS사업팀(김창호PL)'},
+          {name:'김동근', key:'제휴마케팅1본부/TMS사업팀/TMS사업팀(김동근PL)'}
+        ] },
+      { name:'TM인프라/개발팀', head:'김국현', key:'제휴마케팅1본부/TM인프라/개발팀',
+        pls:[{name:'김명기', key:'제휴마케팅1본부/TM인프라/개발팀/TM인프라/개발팀(김명기PL)'}] },
+      { name:'Payment사업팀', head:'이정한', key:'제휴마케팅1본부/Payment사업팀', pls:[] },
+      { name:'특판/MRO사업팀', head:'장주만', key:'제휴마케팅1본부/특판/MRO사업팀', pls:[] },
+      { name:'CC사업팀', head:'김은영', key:'제휴마케팅1본부/CC사업팀', pls:[] },
+      { name:'Mobility사업팀', head:'김준모', key:'제휴마케팅1본부/Mobility사업팀', note:'*모빌리티',
+        pls:[
+          {name:'김홍석', key:'제휴마케팅1본부/Mobility사업팀/Mobility사업팀(김홍석PL)'},
+          {name:'황민하', key:'제휴마케팅1본부/Mobility사업팀/Mobility사업팀(황민하PL)'}
+        ] },
+      { name:'관제플랫폼사업팀', head:'유연희', key:'제휴마케팅1본부/관제플랫폼사업팀', pls:[] }
+    ]
+  },
+  { bunbu:'제휴마케팅2본부', head:'박현순', color:'#d4501a',
+    bunbuTotals:{'2026-06':164,'2026-07':164},
+    bunbuPLs:[],
+    teams:[
+      { name:'쿠폰사업팀',   head:'전용승', key:'제휴마케팅2본부/쿠폰사업팀', pls:[] },
+      { name:'구독서비스팀', head:'박성현', key:'제휴마케팅2본부/구독서비스팀', pls:[] },
+      { name:'멤버십제휴팀', head:'박은철', key:'제휴마케팅2본부/멤버십제휴팀', pls:[] },
+      { name:'상품개발팀', head:'이상경', key:'제휴마케팅2본부/상품개발팀',
+        pls:[{name:'오세원', key:'제휴마케팅2본부/상품개발팀/상품개발팀(오세원PL)'}] },
+      { name:'Enterprise사업팀', head:'신기종', key:'제휴마케팅2본부/Enterprise사업팀',
+        pls:[{name:'김선호', key:'제휴마케팅2본부/Enterprise사업팀/Enterprise사업팀(김선호PL)'}] },
+      { name:'HR사업개발팀', head:'하주석', key:'제휴마케팅2본부/HR사업개발팀',
+        pls:[{name:'박준현', key:'제휴마케팅2본부/HR사업개발팀/HR사업개발팀(박준현PL)'}] },
+      { name:'교육서비스팀', head:'김수진', key:'제휴마케팅2본부/교육서비스팀',
+        pls:[{name:'정미란', key:'제휴마케팅2본부/교육서비스팀/교육서비스팀(정미란PL)'}] }
+    ]
+  },
+  { bunbu:'경영기획본부', head:'최훈용', color:'#3a6e8a',
+    bunbuTotals:{'2026-06':82,'2026-07':82},
+    bunbuPLs:[],
+    teams:[
+      { name:'경영혁신팀',    head:'정재원', key:'경영기획본부/경영혁신팀', pls:[] },
+      { name:'성과관리팀',    head:'양우창', key:'경영기획본부/성과관리팀', pls:[] },
+      { name:'재무회계팀',    head:'조민수', key:'경영기획본부/재무회계팀', pls:[] },
+      { name:'HR/SHE팀',      head:'김용',   key:'경영기획본부/HR/SHE팀', note:'*SHE', pls:[] },
+      { name:'컴플라이언스팀',head:'윤석우', key:'경영기획본부/컴플라이언스팀',
+        pls:[{name:'이창재', key:'경영기획본부/컴플라이언스팀/컴플라이언스팀(이창재PL)'}] },
+      { name:'Infra운영팀',   head:'양대석', key:'경영기획본부/Infra운영팀', pls:[] }
+    ]
+  }
+];
+
+const ORG_GROWTH_S = {name:'성장전략팀', head:'정재원', key:'성장전략팀'};
+const ORG_TOTAL = {'2026-01':535,'2026-02':532,'2026-03':531,'2026-04':527,'2026-05':524,'2026-06':521,'2026-07':519};
+const ORG_DATE_LABEL = {
+  '2026-01':'2026.02.01 기준','2026-02':'2026.03.01 기준',
+  '2026-03':'2026.04.01 기준','2026-04':'2026.05.01 기준','2026-05':'2026.06.01 기준',
+  '2026-06':'2026.07.01 기준','2026-07':'2026.08.01 기준'
+};
+
+function cnt(m, key){ return (ORG_D[m]||ORG_D['2026-05'])[key] || 0; }
+
+function renderOrgChart(month){
+  const m = month || '2026-05';
+  const total = ORG_TOTAL[m] || 524;
+  const od = document.getElementById('org-date');
+  const ob = document.getElementById('org-badge');
+  const isV2 = m >= '2026-06';
+  const struct = isV2 ? ORG_STRUCT_V2 : ORG_STRUCT;
+  if(od) od.textContent = '기준일: ' + (ORG_DATE_LABEL[m]||'');
+  if(ob) ob.textContent = isV2 ? '4본부 26팀' : '5본부 26팀';
+
+  let html = `
+  <svg id="oc-svg" style="position:absolute;top:0;left:0;pointer-events:none;overflow:visible" width="100%" height="100%"></svg>
+  <div class="oc-row1">
+    <div class="oc-ceo" id="oc-ceo">
+      <div class="oc-ceo-title">대표이사</div>
+      <div class="oc-ceo-count">${total.toLocaleString()}명</div>
+    </div>
+  </div>
+  ${m === '2026-07' ? `
+  <div style="height:6px"></div>
+  <div style="position:relative;display:flex;justify-content:center;align-items:center;height:52px">
+    <div id="oc-tf" style="position:absolute;left:calc(50% + 160px);top:50%;transform:translateY(-50%);background:#d6eaf8;border-radius:8px;padding:8px 18px;text-align:center;min-width:120px;box-shadow:0 2px 8px rgba(0,0,0,.13);z-index:3">
+      <div style="font-size:13px;font-weight:700;color:#1a3a5c">미래성장TF</div>
+      <div style="font-size:11px;color:#2e6da4;margin-top:3px">최훈용(겸)</div>
+    </div>
+  </div>
+  <div style="height:20px"></div>
+  ` : '<div class="oc-gap"></div>'}
+  <div class="oc-bunbu-row">`;
+
+  struct.forEach(b => {
+    const bCnt = b.bunbuTotals[m] || b.bunbuTotals[isV2?'2026-06':'2026-05'];
+    html += `<div class="oc-bunbu-col">
+      <div class="oc-bunbu-hdr oc-lv1" style="background:${b.color}">
+        <div class="oc-bunbu-hdr-name">${b.bunbu}</div>
+        <div class="oc-bunbu-hdr-head">${b.head}</div>
+        <span class="oc-bunbu-hdr-cnt">${bCnt}명</span>
+      </div>
+      <div class="oc-team-wrap">`;
+
+    // 본부 직속 PL 조직 (팀 없이 본부 바로 밑 - 일반 PL과 동일 디자인)
+    if(b.bunbuPLs && b.bunbuPLs.length){
+      html += `<div class="oc-pl-sub">`;
+      b.bunbuPLs.forEach(pl => {
+        const pc = cnt(m, pl.key);
+        html += `<div class="oc-pl-row">
+          <div class="oc-pl-line"><div class="oc-pl-line-v"></div><div class="oc-pl-line-h"></div></div>
+          <div class="oc-pl-card">
+            <div class="oc-pl-name">PL ${pl.name} 조직${pl.note?` <span class="oc-tc-note">${pl.note}</span>`:''}</div>
+            <span class="oc-pl-cnt" style="color:${b.color};border-color:${b.color}40">${pc}명</span>
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // 팀 + PL 하위조직
+    b.teams.forEach(t => {
+      const tc = cnt(m, t.key);
+      html += `<div>
+        <div class="oc-team-card" style="border-left:3px solid ${b.color}">
+          <div class="oc-tc-name">${t.name}${t.note?`<span class="oc-tc-note">${t.note}</span>`:''}</div>
+          <div class="oc-tc-head">${t.head} 팀장</div>
+          <span class="oc-tc-cnt" style="background:${b.color}">${tc}명</span>
+        </div>`;
+
+      if(t.pls && t.pls.length){
+        html += `<div class="oc-pl-sub">`;
+        t.pls.forEach(pl => {
+          const pc = cnt(m, pl.key);
+          html += `<div class="oc-pl-row">
+            <div class="oc-pl-line"><div class="oc-pl-line-v"></div><div class="oc-pl-line-h"></div></div>
+            <div class="oc-pl-card">
+              <div class="oc-pl-name">PL ${pl.name} 조직</div>
+              <span class="oc-pl-cnt" style="color:${b.color};border-color:${b.color}40">${pc}명</span>
+            </div>
+          </div>`;
+        });
+        html += `</div>`;
+      }
+      html += `</div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  // 성장전략팀 (인원이 있을 때만, 즉 6월 이전에만 표시)
+  const gcnt = cnt(m, ORG_GROWTH_S.key);
+  if (gcnt > 0) {
+    html += `<div class="oc-growth-col" style="margin-top:40px">
+      <div class="oc-growth-card oc-lv1">
+        <div class="oc-growth-name">${ORG_GROWTH_S.name}</div>
+        <div class="oc-growth-head">${ORG_GROWTH_S.head} 팀장</div>
+        <span class="oc-growth-cnt">${gcnt}명</span>
+      </div>
+    </div>`;
+  }
+
+  html += `</div>`;
+  const el = document.getElementById('org-chart');
+  if(el) el.innerHTML = html;
+  setTimeout(drawOrgConnectors, 40);
+}
+
+function drawOrgConnectors(){
+  const chart = document.getElementById('org-chart');
+  const svg   = document.getElementById('oc-svg');
+  const ceoEl = document.getElementById('oc-ceo');
+  const lv1s  = document.querySelectorAll('#org-chart .oc-lv1');
+  if(!chart||!svg||!ceoEl||!lv1s.length) return;
+
+  const base   = chart.getBoundingClientRect();
+  const cR     = ceoEl.getBoundingClientRect();
+  const ceoCX  = cR.left - base.left + cR.width/2;
+  const ceoBot = cR.top  - base.top  + cR.height;
+
+  // 본부 박스 위치로 midY 계산 (본부 최상단 박스 기준)
+  const firstLv1R = lv1s[0].getBoundingClientRect();
+  const bunbuTopY  = firstLv1R.top - base.top;
+  const midY       = bunbuTopY - 14;
+
+  let d = '';
+
+  // ── 미래성장TF 연결선 (7월 전용) ──
+  const tfEl = document.getElementById('oc-tf');
+  if(tfEl){
+    const tfR    = tfEl.getBoundingClientRect();
+    const tfCY   = tfR.top  - base.top + tfR.height / 2;
+    const tfLeft = tfR.left - base.left;
+    // CEO 하단 → TF 수평 분기점(ceoCX,tfCY)까지 수직
+    d += `<line x1="${ceoCX}" y1="${ceoBot}" x2="${ceoCX}" y2="${tfCY}" stroke="#b0bec5" stroke-width="2" stroke-linecap="round"/>`;
+    // 분기점 → TF 박스 왼쪽 가장자리 수평
+    d += `<line x1="${ceoCX}" y1="${tfCY}" x2="${tfLeft}" y2="${tfCY}" stroke="#b0bec5" stroke-width="2" stroke-linecap="round"/>`;
+    // TF 분기점 → 본부 midY 수직 연결 (계속 내려감)
+    d += `<line x1="${ceoCX}" y1="${tfCY}" x2="${ceoCX}" y2="${midY}" stroke="#b0bec5" stroke-width="2" stroke-linecap="round"/>`;
+  } else {
+    // 일반: CEO 하단 → midY
+    d += `<line x1="${ceoCX}" y1="${ceoBot}" x2="${ceoCX}" y2="${midY}" stroke="#b0bec5" stroke-width="2" stroke-linecap="round"/>`;
+  }
+
+  // 본부 수직 + 수평 연결선
+  const xs = [];
+  lv1s.forEach(el => {
+    const r = el.getBoundingClientRect();
+    const x = r.left - base.left + r.width/2;
+    const y = r.top  - base.top;
+    xs.push(x);
+    d += `<line x1="${x}" y1="${midY}" x2="${x}" y2="${y}" stroke="#b0bec5" stroke-width="2" stroke-linecap="round"/>`;
+  });
+  if(xs.length > 1)
+    d += `<line x1="${Math.min(...xs)}" y1="${midY}" x2="${Math.max(...xs)}" y2="${midY}" stroke="#b0bec5" stroke-width="2" stroke-linecap="round"/>`;
+
+  svg.innerHTML = d;
+  const ch = chart.getBoundingClientRect();
+  svg.setAttribute('width', ch.width);
+  svg.setAttribute('height', ch.height + 40);
+}
+</script>
+</body>
+</html>
